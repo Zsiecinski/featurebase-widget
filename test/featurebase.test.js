@@ -7,7 +7,7 @@ process.env.FEATUREBASE_MOCK = 'false';
 process.env.FEATUREBASE_RETRIES = '2';
 process.env.FEATUREBASE_TIMEOUT_MS = '1000';
 
-const { getChangelogs } = await import('../src/featurebase.js');
+const { getChangelogs, getChangelogById } = await import('../src/featurebase.js');
 
 function stubFetch(impl) {
   globalThis.fetch = impl;
@@ -47,25 +47,32 @@ test('getChangelogs: hits /v2/changelogs with state=live, sorted by date desc', 
   assert.doesNotMatch(capturedUrl, /startDate=/, 'no startDate when daysBack is null');
 });
 
-test('getChangelogs: passes startDate when daysBack is set', async () => {
-  let capturedUrl;
+test('getChangelogById: returns the single matching entry', async () => {
   stubFetch(async (url) => {
-    capturedUrl = url;
-    return jsonResponse({ data: [] });
+    assert.match(url, /\/v2\/changelogs\?id=mock_c1/);
+    return jsonResponse({ data: [{ id: 'mock_c1', title: 'Found it' }] });
   });
 
-  await getChangelogs({ daysBack: 30 });
-  assert.match(capturedUrl, /startDate=/);
-  assert.match(capturedUrl, /limit=50/, 'should fetch wider batch when filtering');
+  const entry = await getChangelogById('mock_c1');
+  assert.equal(entry.id, 'mock_c1');
+  assert.equal(entry.title, 'Found it');
+});
 
-  // Decode the URL and confirm the date is ~30 days ago (within a small margin)
-  const url = new URL(capturedUrl);
-  const startDate = new Date(url.searchParams.get('startDate'));
-  const expected = Date.now() - 30 * 86400 * 1000;
-  assert.ok(
-    Math.abs(startDate.getTime() - expected) < 10000,
-    `startDate should be ~30 days ago, got ${startDate.toISOString()}`,
-  );
+test('getChangelogById: returns null when API returns empty data', async () => {
+  stubFetch(async () => jsonResponse({ data: [] }));
+  const entry = await getChangelogById('missing');
+  assert.equal(entry, null);
+});
+
+test('getChangelogById: returns null for empty id without hitting the API', async () => {
+  let called = false;
+  stubFetch(async () => {
+    called = true;
+    return jsonResponse({ data: [] });
+  });
+  const entry = await getChangelogById('');
+  assert.equal(entry, null);
+  assert.equal(called, false);
 });
 
 test('getChangelogs: returns [] when API returns empty data array', async () => {

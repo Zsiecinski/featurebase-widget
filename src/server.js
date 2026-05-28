@@ -2,13 +2,16 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import { getChangelogs } from './featurebase.js';
-import { doneCanvas, errorCanvas, rangeFor, DEFAULT_TIME_RANGE } from './canvas.js';
+import { getChangelogs, getChangelogById } from './featurebase.js';
+import { homeCanvas, detailCanvas, errorCanvas } from './canvas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');
 
 const app = express();
+// Trust Railway / nginx / Cloudflare X-Forwarded-* headers so req.protocol
+// reports 'https' in production. Needed for absolute sheet URLs.
+app.set('trust proxy', true);
 app.use(express.json());
 app.use('/assets', express.static(assetsDir, { maxAge: '7d', immutable: false }));
 
@@ -22,11 +25,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({
-    ok: true,
-    mock: config.mock,
-    uptime: process.uptime(),
-  });
+  res.json({ ok: true, mock: config.mock, uptime: process.uptime() });
 });
 
 app.get('/favicon.svg', (_req, res) =>
@@ -73,8 +72,7 @@ app.get('/', (_req, res) => {
       code { background: rgba(255,255,255,0.08); color: #c7d2fe; }
     }
     .card {
-      max-width: 520px;
-      width: 100%;
+      max-width: 520px; width: 100%;
       background: rgba(255,255,255,0.7);
       backdrop-filter: blur(12px);
       border: 1px solid rgba(15,23,42,0.08);
@@ -86,24 +84,13 @@ app.get('/', (_req, res) => {
     h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 0.5rem; }
     .tagline { font-size: 1.05rem; margin: 0 0 1.75rem; opacity: 0.7; }
     .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-      padding: 0.375rem 0.75rem;
-      border-radius: 999px;
-      background: ${modeColor}1a;
-      color: ${modeColor};
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-size: 0.875rem; font-weight: 500;
+      padding: 0.375rem 0.75rem; border-radius: 999px;
+      background: ${modeColor}1a; color: ${modeColor};
       margin-bottom: 1.5rem;
     }
-    .status::before {
-      content: "";
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: ${modeColor};
-    }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: ${modeColor}; }
     .muted { color: #64748b; font-size: 0.9rem; line-height: 1.6; }
     code { background: rgba(15,23,42,0.05); padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.85em; }
     .endpoints { margin-top: 1.25rem; font-size: 0.85rem; }
@@ -119,7 +106,8 @@ app.get('/', (_req, res) => {
     <p class="muted">Intercom Canvas Kit app surfacing the Featurebase &ldquo;Done&rdquo; roadmap column inside the Messenger.</p>
     <div class="endpoints muted">
       <div><code>POST /initialize</code> &middot; Canvas render</div>
-      <div><code>POST /submit</code> &middot; Canvas render</div>
+      <div><code>POST /submit</code> &middot; Canvas re-render on interaction</div>
+      <div><code>POST /sheet/:id</code> &middot; Drill-down detail view</div>
       <div><code>GET /health</code> &middot; Uptime check</div>
     </div>
   </main>
@@ -127,47 +115,54 @@ app.get('/', (_req, res) => {
 </html>`);
 });
 
-// Pull the current UI state out of Intercom's request payload.
-//
-// Two sources contribute:
-//   - current_canvas.stored_data: what /submit echoed last time. Always strings.
-//   - input_values: only present when a user-interactive component fired (e.g.
-//     the time_range dropdown sends the new selection here).
-//
-// Buttons fire /submit via component_id. We detect "see_more" / "show_less"
-// clicks and flip the expanded flag without otherwise touching state.
-function readCanvasState(req) {
+// ---------------------------------------------------------------------------
+// Canvas Kit endpoints
+// ---------------------------------------------------------------------------
+
+// Derive the public base URL for this server from the incoming request.
+// Used to build absolute sheet URLs in list items. trust proxy is enabled
+// so req.protocol reflects X-Forwarded-Proto.
+function baseUrlFor(req) {
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+// Read whether the user has tapped Show more / Show less. The previous render
+// echoes back the expanded flag via stored_data; button clicks override.
+function readHomeState(req) {
   const stored = req.body?.current_canvas?.stored_data || {};
-  const input = req.body?.input_values || {};
   const componentId = req.body?.component_id;
-
-  // Time range: input_values (just changed) > stored_data (preserved) > default.
-  const timeRangeId =
-    input.time_range || stored.time_range || DEFAULT_TIME_RANGE;
-  const timeRange = rangeFor(timeRangeId).id;
-
-  // Expanded flag: button clicks override; otherwise echo stored value.
   let expanded = stored.expanded === 'true';
   if (componentId === 'see_more') expanded = true;
   if (componentId === 'show_less') expanded = false;
-
-  return { timeRange, expanded };
+  return { expanded };
 }
 
-async function renderDoneCanvas(req, res) {
-  const { timeRange, expanded } = readCanvasState(req);
-  const range = rangeFor(timeRange);
+async function renderHome(req, res) {
+  const { expanded } = readHomeState(req);
   try {
-    const entries = await getChangelogs({ daysBack: range.days });
-    res.send(doneCanvas(entries, { timeRange, expanded }));
+    const entries = await getChangelogs();
+    res.send(homeCanvas(entries, { expanded, baseUrl: baseUrlFor(req) }));
   } catch (err) {
     console.error('[featurebase] failed:', err.message);
     res.send(errorCanvas());
   }
 }
 
-app.post('/initialize', renderDoneCanvas);
-app.post('/submit', renderDoneCanvas);
+app.post('/initialize', renderHome);
+app.post('/submit', renderHome);
+
+// Sheet endpoint — drill-down detail for one changelog entry.
+// Intercom POSTs here when an item with action.type='sheet' is tapped.
+app.post('/sheet/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const entry = await getChangelogById(id);
+    res.send(detailCanvas(entry));
+  } catch (err) {
+    console.error(`[featurebase] sheet ${id} failed:`, err.message);
+    res.send(errorCanvas());
+  }
+});
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {

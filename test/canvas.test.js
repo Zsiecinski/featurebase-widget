@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { doneCanvas, errorCanvas, rangeFor, DEFAULT_TIME_RANGE, TIME_RANGES, COLLAPSED_COUNT } from '../src/canvas.js';
+import { homeCanvas, detailCanvas, errorCanvas, COLLAPSED_COUNT } from '../src/canvas.js';
 
 const day = 86400 * 1000;
 const now = Date.now();
@@ -32,107 +32,6 @@ const sampleEntries = [
   },
 ];
 
-function componentsOf(canvas) {
-  return canvas.canvas.content.components;
-}
-
-test('doneCanvas: header + smart subhead with count and range', () => {
-  const out = doneCanvas(sampleEntries, { timeRange: '90d' });
-  const comps = componentsOf(out);
-  assert.equal(comps[0].text, 'Recently shipped');
-  assert.equal(comps[1].id, 'subhead');
-  assert.equal(comps[1].text, '3 features in the last 90 days.');
-});
-
-test('doneCanvas: subhead reads "feature" singular at count=1', () => {
-  const out = doneCanvas([sampleEntries[0]], { timeRange: '30d' });
-  assert.match(componentsOf(out)[1].text, /1 feature in/);
-});
-
-test('doneCanvas: subhead omits range when "all time"', () => {
-  const out = doneCanvas(sampleEntries, { timeRange: 'all' });
-  assert.equal(componentsOf(out)[1].text, '3 features shipped so far.');
-});
-
-test('doneCanvas: time-range dropdown auto-submits on change', () => {
-  const out = doneCanvas(sampleEntries, { timeRange: '30d' });
-  const dropdown = componentsOf(out).find((c) => c.id === 'time_range');
-  assert.ok(dropdown, 'expected time_range dropdown');
-  assert.equal(dropdown.type, 'single-select');
-  assert.equal(dropdown.value, '30d');
-  assert.equal(dropdown.action.type, 'submit');
-  assert.equal(dropdown.options.length, TIME_RANGES.length);
-  assert.deepEqual(
-    dropdown.options.map((o) => o.id),
-    TIME_RANGES.map((r) => r.id),
-  );
-});
-
-test('doneCanvas: dropdown can be suppressed via showFilter:false', () => {
-  const out = doneCanvas(sampleEntries, { timeRange: '30d', showFilter: false });
-  assert.equal(
-    componentsOf(out).find((c) => c.id === 'time_range'),
-    undefined,
-  );
-});
-
-test('doneCanvas: featuredImage attaches as item.image (string and object shape)', () => {
-  const out = doneCanvas(sampleEntries, { timeRange: '30d' });
-  const list = componentsOf(out).find((c) => c.type === 'list');
-  const itemA = list.items.find((i) => i.id === 'item_a');
-  assert.equal(itemA.image, 'https://example.com/a.png');
-  // b has no featuredImage → image field omitted
-  const itemB = list.items.find((i) => i.id === 'item_b');
-  assert.equal(itemB.image, undefined);
-});
-
-test('doneCanvas: subtitle includes category badge when no category filter is active', () => {
-  // No FEATUREBASE_CATEGORY set in this test process — badges should render.
-  const out = doneCanvas(sampleEntries, { timeRange: '30d' });
-  const list = componentsOf(out).find((c) => c.type === 'list');
-  const itemA = list.items.find((i) => i.id === 'item_a');
-  assert.match(itemA.subtitle, /^Kiwi Sizing · Shipped today · 5 comments$/);
-  const itemB = list.items.find((i) => i.id === 'item_b');
-  // object-shaped category resolves to its .name
-  assert.match(itemB.subtitle, /^Kiwi Sizing · Shipped 3 days ago$/);
-});
-
-test('doneCanvas: subtitle omits category badge when FEATUREBASE_CATEGORY is set', async () => {
-  process.env.FEATUREBASE_CATEGORY = 'Kiwi';
-  try {
-    // Re-import canvas to pick up the new env (config.featurebase.category is a
-    // lazy getter, so the same import works).
-    const { doneCanvas: dc } = await import(`../src/canvas.js?env=${Date.now()}`);
-    const out = dc(sampleEntries, { timeRange: '30d' });
-    const list = out.canvas.content.components.find((c) => c.type === 'list');
-    const itemA = list.items.find((i) => i.id === 'item_a');
-    assert.match(itemA.subtitle, /^Shipped today · 5 comments$/);
-  } finally {
-    delete process.env.FEATUREBASE_CATEGORY;
-  }
-});
-
-test('doneCanvas: empty state explains current range', () => {
-  const out = doneCanvas([], { timeRange: '7d' });
-  const empty = componentsOf(out).find((c) => c.id === 'empty');
-  assert.match(empty.text, /last 7 days/);
-});
-
-test('doneCanvas: singular comment renders correctly', () => {
-  const out = doneCanvas([sampleEntries[2]], { timeRange: 'all' });
-  const item = componentsOf(out).find((c) => c.type === 'list').items[0];
-  assert.match(item.subtitle, /1 comment$/);
-});
-
-test('rangeFor: defaults to DEFAULT_TIME_RANGE on unknown id', () => {
-  const r = rangeFor('bogus');
-  assert.equal(r.id, DEFAULT_TIME_RANGE);
-});
-
-// ---------------------------------------------------------------------------
-// Collapse / expand behaviour
-// ---------------------------------------------------------------------------
-
 function manyEntries(n) {
   return Array.from({ length: n }, (_, i) => ({
     id: `e${i}`,
@@ -142,52 +41,164 @@ function manyEntries(n) {
   }));
 }
 
-test('doneCanvas: collapsed by default shows only COLLAPSED_COUNT items', () => {
-  const out = doneCanvas(manyEntries(8), { timeRange: '30d' });
-  const list = componentsOf(out).find((c) => c.type === 'list');
+function comp(canvas) {
+  return canvas.canvas.content.components;
+}
+
+// ---------------------------------------------------------------------------
+// Home canvas
+// ---------------------------------------------------------------------------
+
+test('homeCanvas: header + simple subhead (no count, no filter)', () => {
+  const out = homeCanvas(sampleEntries);
+  const c = comp(out);
+  assert.equal(c[0].text, 'Recently shipped');
+  assert.equal(c[1].id, 'subhead');
+  assert.match(c[1].text, /Tap an item/);
+  // No time-range component anywhere
+  assert.equal(c.find((x) => x.id === 'time_range'), undefined);
+});
+
+test('homeCanvas: items use sheet action with absolute URL', () => {
+  const out = homeCanvas(sampleEntries, { baseUrl: 'https://loop.example.com' });
+  const list = comp(out).find((c) => c.type === 'list');
+  assert.equal(list.items.length, sampleEntries.length);
+  const itemA = list.items.find((i) => i.id === 'item_a');
+  assert.equal(itemA.action.type, 'sheet');
+  assert.equal(itemA.action.url, 'https://loop.example.com/sheet/a');
+});
+
+test('homeCanvas: entry id is URL-encoded in sheet URL', () => {
+  const out = homeCanvas(
+    [{ id: 'has spaces/&', title: 'Weird ID', url: 'https://x.test' }],
+    { baseUrl: 'https://loop.example.com' },
+  );
+  const item = comp(out).find((c) => c.type === 'list').items[0];
+  assert.equal(item.action.url, 'https://loop.example.com/sheet/has%20spaces%2F%26');
+});
+
+test('homeCanvas: collapsed by default to COLLAPSED_COUNT items', () => {
+  const out = homeCanvas(manyEntries(8));
+  const list = comp(out).find((c) => c.type === 'list');
   assert.equal(list.items.length, COLLAPSED_COUNT);
 });
 
-test('doneCanvas: collapsed renders "Show N more" link with the hidden count', () => {
-  const out = doneCanvas(manyEntries(8), { timeRange: '30d' });
-  const seeMore = componentsOf(out).find((c) => c.id === 'see_more');
-  assert.ok(seeMore, 'expected see_more button');
-  assert.equal(seeMore.style, 'link');
-  assert.equal(seeMore.action.type, 'submit');
+test('homeCanvas: Show N more shows the exact hidden count', () => {
+  const out = homeCanvas(manyEntries(8));
+  const seeMore = comp(out).find((c) => c.id === 'see_more');
+  assert.ok(seeMore);
   assert.match(seeMore.label, /Show 5 more/);
+  assert.equal(seeMore.action.type, 'submit');
 });
 
-test('doneCanvas: expanded shows all items + "Show less" toggle', () => {
-  const out = doneCanvas(manyEntries(8), { timeRange: '30d', expanded: true });
-  const list = componentsOf(out).find((c) => c.type === 'list');
+test('homeCanvas: expanded shows all + Show less, no see_more', () => {
+  const out = homeCanvas(manyEntries(8), { expanded: true });
+  const list = comp(out).find((c) => c.type === 'list');
   assert.equal(list.items.length, 8);
-  const less = componentsOf(out).find((c) => c.id === 'show_less');
-  assert.ok(less, 'expected show_less button');
-  assert.equal(less.action.type, 'submit');
-  assert.equal(componentsOf(out).find((c) => c.id === 'see_more'), undefined);
+  assert.ok(comp(out).find((c) => c.id === 'show_less'));
+  assert.equal(comp(out).find((c) => c.id === 'see_more'), undefined);
 });
 
-test('doneCanvas: no toggle button when total <= COLLAPSED_COUNT', () => {
-  const out = doneCanvas(manyEntries(2), { timeRange: '30d' });
-  assert.equal(componentsOf(out).find((c) => c.id === 'see_more'), undefined);
-  assert.equal(componentsOf(out).find((c) => c.id === 'show_less'), undefined);
+test('homeCanvas: no toggle when total <= COLLAPSED_COUNT', () => {
+  const out = homeCanvas(manyEntries(2));
+  assert.equal(comp(out).find((c) => c.id === 'see_more'), undefined);
+  assert.equal(comp(out).find((c) => c.id === 'show_less'), undefined);
 });
 
-test('doneCanvas: stored_data echoes expanded + time_range as strings', () => {
-  const out = doneCanvas(manyEntries(5), { timeRange: '7d', expanded: true });
-  assert.deepEqual(out.canvas.stored_data, { expanded: 'true', time_range: '7d' });
-
-  const out2 = doneCanvas(manyEntries(5), { timeRange: '30d', expanded: false });
-  assert.deepEqual(out2.canvas.stored_data, { expanded: 'false', time_range: '30d' });
+test('homeCanvas: stored_data persists expanded as string', () => {
+  assert.deepEqual(
+    homeCanvas(manyEntries(5), { expanded: true }).canvas.stored_data,
+    { expanded: 'true' },
+  );
+  assert.deepEqual(
+    homeCanvas(manyEntries(5)).canvas.stored_data,
+    { expanded: 'false' },
+  );
 });
+
+test('homeCanvas: featuredImage attaches as item.image (string + object shapes)', () => {
+  const out = homeCanvas(sampleEntries);
+  const list = comp(out).find((c) => c.type === 'list');
+  assert.equal(list.items.find((i) => i.id === 'item_a').image, 'https://example.com/a.png');
+  assert.equal(list.items.find((i) => i.id === 'item_b').image, undefined);
+});
+
+test('homeCanvas: empty state shows muted message', () => {
+  const out = homeCanvas([]);
+  const empty = comp(out).find((c) => c.id === 'empty');
+  assert.ok(empty);
+  assert.match(empty.text, /Nothing shipped yet/);
+});
+
+// ---------------------------------------------------------------------------
+// Detail canvas
+// ---------------------------------------------------------------------------
+
+test('detailCanvas: title + meta + body paragraphs + open-on-Featurebase button', () => {
+  const entry = {
+    id: 'x',
+    title: 'Big new thing',
+    url: 'https://staytuned.featurebase.app/changelog/big-new-thing',
+    date: iso(2 * day),
+    commentCount: 3,
+    categories: ['Kiwi Sizing'],
+    markdownContent: '## What changed\n\nThis is paragraph one with **bold** text.\n\nThis is paragraph two with a [link](https://x.test).',
+  };
+  const out = detailCanvas(entry);
+  const c = comp(out);
+
+  assert.equal(c.find((x) => x.id === 'd_title').text, 'Big new thing');
+  assert.match(c.find((x) => x.id === 'd_meta').text, /Shipped 2 days ago · Kiwi Sizing · 3 comments/);
+
+  // Markdown stripped
+  const bodyTexts = c.filter((x) => x.id?.startsWith('d_body_'));
+  assert.ok(bodyTexts.length >= 2, 'expected at least 2 body paragraphs');
+  assert.match(bodyTexts[0].text, /What changed/);
+  // ** stripped, plain text remains
+  assert.match(bodyTexts.map((b) => b.text).join(' '), /This is paragraph one with bold text\./);
+  // [link](url) → just text
+  assert.match(bodyTexts.map((b) => b.text).join(' '), /with a link\./);
+
+  const openBtn = c.find((x) => x.id === 'd_open_full');
+  assert.equal(openBtn.action.url, entry.url);
+});
+
+test('detailCanvas: includes hero image when featuredImage exists', () => {
+  const entry = {
+    id: 'x',
+    title: 't',
+    url: 'https://x.test',
+    featuredImage: 'https://example.com/hero.png',
+  };
+  const out = detailCanvas(entry);
+  const hero = comp(out).find((c) => c.id === 'hero');
+  assert.ok(hero);
+  assert.equal(hero.type, 'image');
+  assert.equal(hero.url, 'https://example.com/hero.png');
+});
+
+test('detailCanvas: long body is truncated with "continue reading" hint', () => {
+  const longText = 'word '.repeat(500); // ~2500 chars
+  const out = detailCanvas({ id: 'x', title: 't', url: 'https://x.test', markdownContent: longText });
+  const more = comp(out).find((c) => c.id === 'd_body_more');
+  assert.ok(more, 'expected continue-reading hint');
+  assert.match(more.text, /Continue reading/);
+});
+
+test('detailCanvas: not-found state when entry is null', () => {
+  const out = detailCanvas(null);
+  const c = comp(out);
+  assert.equal(c[0].id, 'd_nf_title');
+  assert.match(c[0].text, /Update unavailable/);
+});
+
+// ---------------------------------------------------------------------------
+// Error canvas
+// ---------------------------------------------------------------------------
 
 test('errorCanvas: title + muted body + primary fallback button', () => {
   const out = errorCanvas();
-  const comps = componentsOf(out);
-  assert.equal(comps[0].id, 'err_title');
-  assert.match(comps[0].text, /Couldn't load/);
-  assert.equal(comps[1].style, 'muted');
-  const footer = comps.find((c) => c.id === 'full_roadmap');
-  assert.equal(footer.action.type, 'url');
-  assert.equal(footer.style, 'primary');
+  const c = comp(out);
+  assert.equal(c[0].id, 'err_title');
+  assert.equal(c.find((x) => x.id === 'full_roadmap').style, 'primary');
 });

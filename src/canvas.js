@@ -1,23 +1,8 @@
 import { config } from './config.js';
 
-// ---------------------------------------------------------------------------
-// Time range filter options. `id` is what's sent back in submit input_values.
-// Keep this list short — Canvas Kit dropdowns hold their height open whether
-// they have 3 options or 30.
-// ---------------------------------------------------------------------------
-export const TIME_RANGES = [
-  { id: '7d', label: 'Last 7 days', days: 7 },
-  { id: '30d', label: 'Last 30 days', days: 30 },
-  { id: '90d', label: 'Last 90 days', days: 90 },
-  { id: 'all', label: 'All time', days: null },
-];
-
-export const DEFAULT_TIME_RANGE = '30d';
 export const COLLAPSED_COUNT = 3;
-
-export function rangeFor(id) {
-  return TIME_RANGES.find((r) => r.id === id) || TIME_RANGES.find((r) => r.id === DEFAULT_TIME_RANGE);
-}
+// Cap the detail content to avoid a wall of text in a Messenger sheet.
+const DETAIL_BODY_CHAR_LIMIT = 600;
 
 // ---------------------------------------------------------------------------
 // Date formatting
@@ -43,15 +28,13 @@ function formatShippedDate(iso) {
 
 // ---------------------------------------------------------------------------
 // Featured image extraction. Featurebase doesn't document the exact shape;
-// handle string URL, { url }, { src }, or array-of-images conventions.
+// handle string URL, { url }, { src }, or array conventions.
 // ---------------------------------------------------------------------------
 function extractImage(entry) {
   const f = entry.featuredImage;
   if (!f) return null;
   if (typeof f === 'string') return f;
-  if (typeof f === 'object') {
-    return f.url || f.src || f.href || null;
-  }
+  if (typeof f === 'object') return f.url || f.src || f.href || null;
   return null;
 }
 
@@ -78,20 +61,47 @@ function entrySubtitle(entry, { showCategory } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Main canvas builder
+// Markdown → plain-text. Canvas Kit text components don't render markdown,
+// so we strip syntax and rely on paragraph breaks for visual structure.
+// ---------------------------------------------------------------------------
+function stripMarkdown(md) {
+  if (!md) return '';
+  return md
+    .replace(/```[\s\S]*?```/g, '')        // fenced code blocks
+    .replace(/`([^`]+)`/g, '$1')           // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')  // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → just text
+    .replace(/^#{1,6}\s+/gm, '')           // headings
+    .replace(/^\s*>\s?/gm, '')             // blockquotes
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')    // bold
+    .replace(/(\*|_)(.+?)\1/g, '$2')       // italic
+    .replace(/^[\-\*\+]\s+/gm, '• ')       // bullet list
+    .replace(/^\d+\.\s+/gm, '')            // numbered list
+    .replace(/<[^>]+>/g, '')               // strip any HTML tags
+    .replace(/\n{3,}/g, '\n\n')            // collapse runs of blank lines
+    .trim();
+}
+
+function truncate(text, limit) {
+  if (text.length <= limit) return { text, truncated: false };
+  const cut = text.slice(0, limit);
+  const lastBreak = cut.lastIndexOf(' ');
+  return { text: cut.slice(0, lastBreak > 0 ? lastBreak : limit) + '…', truncated: true };
+}
+
+// ---------------------------------------------------------------------------
+// Home canvas — the card users see when they tap Loop in Messenger Home.
 // ---------------------------------------------------------------------------
 /**
- * @param {Array} entries - Filtered changelog entries to render.
+ * @param {Array} entries
  * @param {object} [opts]
- * @param {string}  [opts.timeRange]   - Currently-selected time range id.
- * @param {boolean} [opts.expanded]    - Show all entries vs. collapsed (3).
- * @param {boolean} [opts.showFilter]  - Render the time range dropdown.
+ * @param {boolean} [opts.expanded]  - Show all entries vs. top COLLAPSED_COUNT.
+ * @param {string}  [opts.baseUrl]   - Public URL of this server, used to build
+ *                                     absolute sheet URLs per item.
  */
-export function doneCanvas(entries, opts = {}) {
-  const timeRange = opts.timeRange || DEFAULT_TIME_RANGE;
+export function homeCanvas(entries, opts = {}) {
   const expanded = Boolean(opts.expanded);
-  const showFilter = opts.showFilter !== false;
-  const range = rangeFor(timeRange);
+  const baseUrl = opts.baseUrl || '';
   const showCategoryBadge = !config.featurebase.category;
 
   const total = entries.length;
@@ -99,41 +109,21 @@ export function doneCanvas(entries, opts = {}) {
   const hiddenCount = Math.max(total - visible.length, 0);
 
   const components = [
-    {
-      type: 'text',
-      id: 'header',
-      text: 'Recently shipped',
-      style: 'header',
-    },
+    { type: 'text', id: 'header', text: 'Recently shipped', style: 'header' },
     {
       type: 'text',
       id: 'subhead',
-      text: subheadText(total, range),
+      text: 'Features we just launched. Tap an item for details.',
       style: 'muted',
     },
+    { type: 'spacer', id: 'sp_list', size: 'xs' },
   ];
-
-  if (showFilter) {
-    components.push(
-      { type: 'spacer', id: 'sp_filter', size: 'xs' },
-      {
-        type: 'single-select',
-        id: 'time_range',
-        label: 'Show',
-        value: timeRange,
-        options: TIME_RANGES.map((r) => ({ type: 'option', id: r.id, text: r.label })),
-        action: { type: 'submit' },
-      },
-    );
-  }
-
-  components.push({ type: 'spacer', id: 'sp_list', size: 'xs' });
 
   if (total === 0) {
     components.push({
       type: 'text',
       id: 'empty',
-      text: emptyText(range),
+      text: 'Nothing shipped yet — check back soon!',
       align: 'center',
       style: 'muted',
     });
@@ -145,7 +135,12 @@ export function doneCanvas(entries, opts = {}) {
         type: 'item',
         id: `item_${e.id}`,
         title: e.title,
-        action: { type: 'url', url: e.url },
+        // Sheet action opens the detail canvas inside Messenger instead of
+        // kicking the user out to a browser tab.
+        action: {
+          type: 'sheet',
+          url: `${baseUrl}/sheet/${encodeURIComponent(e.id)}`,
+        },
       };
       if (subtitle) item.subtitle = subtitle;
       if (image) {
@@ -157,7 +152,6 @@ export function doneCanvas(entries, opts = {}) {
     components.push({ type: 'list', id: 'shipped_list', items });
   }
 
-  // See more / Show less toggle. Only render when there's something to toggle.
   if (total > COLLAPSED_COUNT) {
     components.push({ type: 'spacer', id: 'sp_toggle', size: 'xs' });
     if (!expanded) {
@@ -190,36 +184,132 @@ export function doneCanvas(entries, opts = {}) {
     },
   );
 
-  // Persist UI state across Intercom submits. Canvas Kit requires all values
-  // in stored_data to be strings.
-  const stored_data = {
-    expanded: expanded ? 'true' : 'false',
-    time_range: timeRange,
+  return {
+    canvas: {
+      content: { components },
+      stored_data: { expanded: expanded ? 'true' : 'false' },
+    },
   };
-
-  return { canvas: { content: { components }, stored_data } };
-}
-
-function subheadText(count, range) {
-  if (count === 0) {
-    return range.days
-      ? `Nothing shipped in the ${range.label.toLowerCase()}.`
-      : 'No shipped features yet.';
-  }
-  const noun = count === 1 ? 'feature' : 'features';
-  if (!range.days) {
-    return `${count} ${noun} shipped so far.`;
-  }
-  return `${count} ${noun} in the ${range.label.toLowerCase()}.`;
-}
-
-function emptyText(range) {
-  if (!range.days) return 'Nothing shipped yet — check back soon!';
-  return `Nothing in the ${range.label.toLowerCase()}. Try a wider range.`;
 }
 
 // ---------------------------------------------------------------------------
-// Error fallback
+// Detail canvas — the slide-over sheet a user sees when tapping a list item.
+// ---------------------------------------------------------------------------
+/**
+ * @param {object|null} entry - The changelog entry to render, or null if it
+ *                              couldn't be loaded.
+ */
+export function detailCanvas(entry) {
+  if (!entry) return detailNotFoundCanvas();
+
+  const components = [];
+
+  const image = extractImage(entry);
+  if (image) {
+    components.push({
+      type: 'image',
+      id: 'hero',
+      url: image,
+      width: 600,
+      height: 300,
+      rounded: false,
+    });
+    components.push({ type: 'spacer', id: 'sp_hero', size: 'xs' });
+  }
+
+  components.push({
+    type: 'text',
+    id: 'd_title',
+    text: entry.title,
+    style: 'header',
+  });
+
+  const meta = [];
+  const when = formatShippedDate(entry.date);
+  if (when) meta.push(`Shipped ${when}`);
+  const cat = firstCategoryName(entry);
+  if (cat) meta.push(cat);
+  if (typeof entry.commentCount === 'number' && entry.commentCount > 0) {
+    meta.push(`${entry.commentCount} ${entry.commentCount === 1 ? 'comment' : 'comments'}`);
+  }
+  if (meta.length > 0) {
+    components.push({
+      type: 'text',
+      id: 'd_meta',
+      text: meta.join(' · '),
+      style: 'muted',
+    });
+  }
+
+  // Body content — prefer markdownContent, fall back to content (stripped of
+  // HTML), split into paragraphs, cap total length to avoid a wall of text.
+  const raw = entry.markdownContent || entry.content || '';
+  const stripped = stripMarkdown(raw);
+  const { text, truncated } = truncate(stripped, DETAIL_BODY_CHAR_LIMIT);
+  if (text) {
+    components.push({ type: 'spacer', id: 'sp_body', size: 'xs' });
+    const paragraphs = text.split(/\n{2,}/).filter(Boolean);
+    paragraphs.forEach((p, i) => {
+      components.push({
+        type: 'text',
+        id: `d_body_${i}`,
+        text: p,
+        style: 'paragraph',
+      });
+    });
+    if (truncated) {
+      components.push({
+        type: 'text',
+        id: 'd_body_more',
+        text: 'Continue reading on the full post →',
+        style: 'muted',
+      });
+    }
+  }
+
+  components.push({ type: 'spacer', id: 'sp_d_footer', size: 'xs' });
+
+  if (entry.url) {
+    components.push({
+      type: 'button',
+      id: 'd_open_full',
+      label: 'Open on Featurebase',
+      style: 'primary',
+      action: { type: 'url', url: entry.url },
+    });
+  }
+
+  return { canvas: { content: { components } } };
+}
+
+function detailNotFoundCanvas() {
+  return {
+    canvas: {
+      content: {
+        components: [
+          { type: 'text', id: 'd_nf_title', text: 'Update unavailable', style: 'header' },
+          {
+            type: 'text',
+            id: 'd_nf_body',
+            text: "We couldn't load this update. It may have been removed.",
+            style: 'muted',
+          },
+          { type: 'spacer', id: 'd_nf_sp', size: 'xs' },
+          {
+            type: 'button',
+            id: 'd_nf_btn',
+            label: 'See full roadmap',
+            style: 'primary',
+            action: { type: 'url', url: config.roadmapUrl },
+          },
+        ],
+      },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Generic error canvas (network / API failures).
 // ---------------------------------------------------------------------------
 export function errorCanvas() {
   return {

@@ -73,6 +73,24 @@ function matchesCategory(entry, needle) {
  * @param {number|null} [opts.daysBack] - If set, restrict to entries shipped
  *   within the last N days. null/0 = all time.
  */
+/**
+ * Look up a single changelog entry by id (or slug, per Featurebase docs).
+ * Returns null if not found.
+ */
+export async function getChangelogById(id) {
+  if (!id) return null;
+  if (config.mock) {
+    const { mockChangelogs } = await import('./mock.js');
+    return mockChangelogs.find((e) => e.id === id) || null;
+  }
+  const qs = new URLSearchParams({ id });
+  const data = await fb(`/v2/changelogs?${qs.toString()}`, {
+    retries: config.featurebase.retries,
+  });
+  const list = data.data || [];
+  return list[0] || null;
+}
+
 export async function getChangelogs({ daysBack = null } = {}) {
   if (config.mock) {
     // Apply the same daysBack filter to mocks so the UI behaves the same in
