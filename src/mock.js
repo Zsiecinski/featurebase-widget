@@ -13,6 +13,7 @@ export const mockChangelogs = [
     date: iso(2 * day),
     commentCount: 4,
     categories: ['Kiwi Size Chart & Recommender'],
+    featuredImage: 'https://featurebase-widget-production.up.railway.app/assets/logo-192.png',
     state: 'live',
   },
   {
@@ -22,6 +23,7 @@ export const mockChangelogs = [
     date: iso(9 * day),
     commentCount: 2,
     categories: ['Kiwi Size Chart & Recommender'],
+    featuredImage: { url: 'https://featurebase-widget-production.up.railway.app/assets/logo-192.png' },
     state: 'live',
   },
   {
@@ -30,6 +32,15 @@ export const mockChangelogs = [
     url: 'https://staytuned.featurebase.app/changelog/mock-jewelry',
     date: iso(21 * day),
     commentCount: 0,
+    categories: ['Kiwi Size Chart & Recommender'],
+    state: 'live',
+  },
+  {
+    id: 'mock_c4',
+    title: 'Bulk import via CSV',
+    url: 'https://staytuned.featurebase.app/changelog/mock-csv',
+    date: iso(45 * day),
+    commentCount: 11,
     categories: ['Kiwi Size Chart & Recommender'],
     state: 'live',
   },

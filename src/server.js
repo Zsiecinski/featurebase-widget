@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { getChangelogs } from './featurebase.js';
-import { doneCanvas, errorCanvas } from './canvas.js';
+import { doneCanvas, errorCanvas, rangeFor, DEFAULT_TIME_RANGE } from './canvas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');
@@ -127,10 +127,22 @@ app.get('/', (_req, res) => {
 </html>`);
 });
 
-async function renderDoneCanvas(_req, res) {
+// On every Intercom request (init + submit) we read the current filter state
+// from input_values (set when the dropdown submits) and re-render.
+function readTimeRange(req) {
+  const id = req.body?.input_values?.time_range;
+  if (!id) return DEFAULT_TIME_RANGE;
+  // Validate against known options to avoid passing arbitrary input through.
+  const matched = rangeFor(id);
+  return matched.id;
+}
+
+async function renderDoneCanvas(req, res) {
+  const timeRange = readTimeRange(req);
+  const range = rangeFor(timeRange);
   try {
-    const entries = await getChangelogs();
-    res.send(doneCanvas(entries));
+    const entries = await getChangelogs({ daysBack: range.days });
+    res.send(doneCanvas(entries, { timeRange }));
   } catch (err) {
     console.error('[featurebase] failed:', err.message);
     res.send(errorCanvas());

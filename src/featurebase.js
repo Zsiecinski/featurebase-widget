@@ -68,11 +68,27 @@ function matchesCategory(entry, needle) {
   });
 }
 
-export async function getChangelogs() {
-  if (config.mock) return mockChangelogs;
+/**
+ * @param {object} [opts]
+ * @param {number|null} [opts.daysBack] - If set, restrict to entries shipped
+ *   within the last N days. null/0 = all time.
+ */
+export async function getChangelogs({ daysBack = null } = {}) {
+  if (config.mock) {
+    // Apply the same daysBack filter to mocks so the UI behaves the same in
+    // mock mode as in production.
+    if (!daysBack) return mockChangelogs;
+    const cutoff = Date.now() - daysBack * 86400 * 1000;
+    return mockChangelogs.filter(
+      (e) => !e.date || new Date(e.date).getTime() >= cutoff,
+    );
+  }
 
   const needle = config.featurebase.category;
-  const apiLimit = needle ? CLIENT_FILTER_FETCH_LIMIT : config.maxItems;
+  // When filtering client-side (category or daysBack), fetch a wider batch
+  // so we don't miss matches sitting beyond the first `maxItems` rows.
+  const useClientFilter = Boolean(needle) || Boolean(daysBack);
+  const apiLimit = useClientFilter ? CLIENT_FILTER_FETCH_LIMIT : config.maxItems;
 
   const qs = new URLSearchParams({
     state: 'live',
@@ -80,14 +96,17 @@ export async function getChangelogs() {
     sortOrder: 'desc',
     limit: String(apiLimit),
   });
+  if (daysBack) {
+    const startDate = new Date(Date.now() - daysBack * 86400 * 1000);
+    qs.set('startDate', startDate.toISOString());
+  }
 
   const data = await fb(`/v2/changelogs?${qs.toString()}`, {
     retries: config.featurebase.retries,
   });
   const all = data.data || [];
-
-  if (!needle) return all.slice(0, config.maxItems);
-
-  const filtered = all.filter((entry) => matchesCategory(entry, needle));
+  const filtered = needle
+    ? all.filter((entry) => matchesCategory(entry, needle))
+    : all;
   return filtered.slice(0, config.maxItems);
 }

@@ -39,12 +39,33 @@ test('getChangelogs: hits /v2/changelogs with state=live, sorted by date desc', 
   assert.equal(out.length, 2);
   assert.equal(out[0].id, 'c1');
 
-  // Sanity-check the URL the client builds
   assert.match(capturedUrl, /\/v2\/changelogs\?/);
   assert.match(capturedUrl, /state=live/);
   assert.match(capturedUrl, /sortBy=date/);
   assert.match(capturedUrl, /sortOrder=desc/);
   assert.doesNotMatch(capturedUrl, /categories=/, 'no category param when env var unset');
+  assert.doesNotMatch(capturedUrl, /startDate=/, 'no startDate when daysBack is null');
+});
+
+test('getChangelogs: passes startDate when daysBack is set', async () => {
+  let capturedUrl;
+  stubFetch(async (url) => {
+    capturedUrl = url;
+    return jsonResponse({ data: [] });
+  });
+
+  await getChangelogs({ daysBack: 30 });
+  assert.match(capturedUrl, /startDate=/);
+  assert.match(capturedUrl, /limit=50/, 'should fetch wider batch when filtering');
+
+  // Decode the URL and confirm the date is ~30 days ago (within a small margin)
+  const url = new URL(capturedUrl);
+  const startDate = new Date(url.searchParams.get('startDate'));
+  const expected = Date.now() - 30 * 86400 * 1000;
+  assert.ok(
+    Math.abs(startDate.getTime() - expected) < 10000,
+    `startDate should be ~30 days ago, got ${startDate.toISOString()}`,
+  );
 });
 
 test('getChangelogs: returns [] when API returns empty data array', async () => {
