@@ -8,7 +8,7 @@ process.env.FEATUREBASE_MOCK = 'false';
 process.env.FEATUREBASE_RETRIES = '2';
 process.env.FEATUREBASE_TIMEOUT_MS = '1000';
 
-const { getCompletedStatusId, _resetCacheForTests } = await import(
+const { getCompletedStatusId, getBoardId, _resetCacheForTests } = await import(
   '../src/featurebase.js'
 );
 
@@ -80,6 +80,78 @@ test('getCompletedStatusId: throws when no completed status exists', async () =>
     () => getCompletedStatusId(),
     /No status with type 'completed'/,
   );
+});
+
+test('getBoardId: returns null when FEATUREBASE_BOARD is empty', async () => {
+  _resetCacheForTests();
+  // No board configured — no API call should happen and we should get null.
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    return jsonResponse([]);
+  });
+  // Ensure module reads the live env (config is captured at import time, so we
+  // rely on the fact that no env was set when this test file loaded).
+  const id = await getBoardId();
+  assert.equal(id, null);
+  assert.equal(calls, 0, 'should not hit the API when no board is configured');
+});
+
+test('getBoardId: resolves a name substring to a board id', async () => {
+  _resetCacheForTests();
+  process.env.FEATUREBASE_BOARD = 'kiwi';
+  try {
+    stubFetch(async () =>
+      jsonResponse([
+        { id: 'board_tickets', name: 'Tickets & Events' },
+        { id: 'board_kiwi', name: 'Kiwi Size Chart & Recommender' },
+        { id: 'board_general', name: 'General feedback' },
+      ]),
+    );
+
+    const id = await getBoardId();
+    assert.equal(id, 'board_kiwi');
+  } finally {
+    delete process.env.FEATUREBASE_BOARD;
+  }
+});
+
+test('getBoardId: passes a 24-char hex value through without an API call', async () => {
+  _resetCacheForTests();
+  process.env.FEATUREBASE_BOARD = '507f1f77bcf86cd799439011';
+  try {
+    let calls = 0;
+    stubFetch(async () => {
+      calls++;
+      return jsonResponse([]);
+    });
+
+    const id = await getBoardId();
+    assert.equal(id, '507f1f77bcf86cd799439011');
+    assert.equal(calls, 0, 'should not hit the API when a board ID is given directly');
+  } finally {
+    delete process.env.FEATUREBASE_BOARD;
+  }
+});
+
+test('getBoardId: throws a helpful error when no board name matches', async () => {
+  _resetCacheForTests();
+  process.env.FEATUREBASE_BOARD = 'nonexistent';
+  try {
+    stubFetch(async () =>
+      jsonResponse([
+        { id: 'b1', name: 'Tickets & Events' },
+        { id: 'b2', name: 'Kiwi Size Chart & Recommender' },
+      ]),
+    );
+
+    await assert.rejects(
+      () => getBoardId(),
+      /No Featurebase board matches "nonexistent".*Tickets.*Kiwi/s,
+    );
+  } finally {
+    delete process.env.FEATUREBASE_BOARD;
+  }
 });
 
 test('getCompletedStatusId: retries on failure before surfacing error', async () => {

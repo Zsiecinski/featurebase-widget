@@ -2,6 +2,11 @@ import { config } from './config.js';
 import { mockPosts, mockStatuses } from './mock.js';
 
 let completedStatusIdCache = null;
+let boardIdCache = null;
+
+// Featurebase IDs are 24-char hex (MongoDB ObjectId). If the user pasted one
+// directly into FEATUREBASE_BOARD, skip the name-lookup step.
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
@@ -61,20 +66,56 @@ export async function getCompletedStatusId() {
   return done.id;
 }
 
+export async function getBoardId() {
+  if (config.mock) return null;
+  if (!config.featurebase.board) return null;
+  if (boardIdCache) return boardIdCache;
+
+  // Already a board ID? Use it directly.
+  if (OBJECT_ID.test(config.featurebase.board)) {
+    boardIdCache = config.featurebase.board;
+    return boardIdCache;
+  }
+
+  // Otherwise look up by name substring.
+  const data = await fb('/v2/boards', {
+    retries: config.featurebase.retries,
+  });
+  // /v2/boards returns a bare array, same shape as /v2/post_statuses.
+  const list = Array.isArray(data) ? data : data.data || [];
+  const needle = config.featurebase.board.toLowerCase();
+  const match = list.find((b) => (b.name || '').toLowerCase().includes(needle));
+  if (!match) {
+    const names = list.map((b) => `"${b.name}"`).join(', ');
+    throw new Error(
+      `No Featurebase board matches "${config.featurebase.board}". Available: ${names}`,
+    );
+  }
+  boardIdCache = match.id;
+  return boardIdCache;
+}
+
 export async function getDonePosts() {
   if (config.mock) return mockPosts;
 
-  const statusId = await getCompletedStatusId();
+  const [statusId, boardId] = await Promise.all([
+    getCompletedStatusId(),
+    getBoardId(),
+  ]);
+
   const qs = new URLSearchParams({
     statusId,
     sortBy: 'recent',
     sortOrder: 'desc',
     limit: String(config.maxItems),
   });
+  if (boardId) qs.set('boardId', boardId);
+
   const data = await fb(`/v2/posts?${qs.toString()}`);
   return data.data || [];
 }
 
 export function _resetCacheForTests() {
   completedStatusIdCache = null;
+  boardIdCache = null;
 }
