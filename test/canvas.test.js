@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { doneCanvas, errorCanvas, rangeFor, DEFAULT_TIME_RANGE, TIME_RANGES } from '../src/canvas.js';
+import { doneCanvas, errorCanvas, rangeFor, DEFAULT_TIME_RANGE, TIME_RANGES, COLLAPSED_COUNT } from '../src/canvas.js';
 
 const day = 86400 * 1000;
 const now = Date.now();
@@ -127,6 +127,58 @@ test('doneCanvas: singular comment renders correctly', () => {
 test('rangeFor: defaults to DEFAULT_TIME_RANGE on unknown id', () => {
   const r = rangeFor('bogus');
   assert.equal(r.id, DEFAULT_TIME_RANGE);
+});
+
+// ---------------------------------------------------------------------------
+// Collapse / expand behaviour
+// ---------------------------------------------------------------------------
+
+function manyEntries(n) {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `e${i}`,
+    title: `Entry ${i}`,
+    url: `https://example.com/${i}`,
+    date: iso(i * day),
+  }));
+}
+
+test('doneCanvas: collapsed by default shows only COLLAPSED_COUNT items', () => {
+  const out = doneCanvas(manyEntries(8), { timeRange: '30d' });
+  const list = componentsOf(out).find((c) => c.type === 'list');
+  assert.equal(list.items.length, COLLAPSED_COUNT);
+});
+
+test('doneCanvas: collapsed renders "Show N more" link with the hidden count', () => {
+  const out = doneCanvas(manyEntries(8), { timeRange: '30d' });
+  const seeMore = componentsOf(out).find((c) => c.id === 'see_more');
+  assert.ok(seeMore, 'expected see_more button');
+  assert.equal(seeMore.style, 'link');
+  assert.equal(seeMore.action.type, 'submit');
+  assert.match(seeMore.label, /Show 5 more/);
+});
+
+test('doneCanvas: expanded shows all items + "Show less" toggle', () => {
+  const out = doneCanvas(manyEntries(8), { timeRange: '30d', expanded: true });
+  const list = componentsOf(out).find((c) => c.type === 'list');
+  assert.equal(list.items.length, 8);
+  const less = componentsOf(out).find((c) => c.id === 'show_less');
+  assert.ok(less, 'expected show_less button');
+  assert.equal(less.action.type, 'submit');
+  assert.equal(componentsOf(out).find((c) => c.id === 'see_more'), undefined);
+});
+
+test('doneCanvas: no toggle button when total <= COLLAPSED_COUNT', () => {
+  const out = doneCanvas(manyEntries(2), { timeRange: '30d' });
+  assert.equal(componentsOf(out).find((c) => c.id === 'see_more'), undefined);
+  assert.equal(componentsOf(out).find((c) => c.id === 'show_less'), undefined);
+});
+
+test('doneCanvas: stored_data echoes expanded + time_range as strings', () => {
+  const out = doneCanvas(manyEntries(5), { timeRange: '7d', expanded: true });
+  assert.deepEqual(out.canvas.stored_data, { expanded: 'true', time_range: '7d' });
+
+  const out2 = doneCanvas(manyEntries(5), { timeRange: '30d', expanded: false });
+  assert.deepEqual(out2.canvas.stored_data, { expanded: 'false', time_range: '30d' });
 });
 
 test('errorCanvas: title + muted body + primary fallback button', () => {

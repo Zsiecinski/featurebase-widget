@@ -13,6 +13,7 @@ export const TIME_RANGES = [
 ];
 
 export const DEFAULT_TIME_RANGE = '30d';
+export const COLLAPSED_COUNT = 3;
 
 export function rangeFor(id) {
   return TIME_RANGES.find((r) => r.id === id) || TIME_RANGES.find((r) => r.id === DEFAULT_TIME_RANGE);
@@ -82,16 +83,20 @@ function entrySubtitle(entry, { showCategory } = {}) {
 /**
  * @param {Array} entries - Filtered changelog entries to render.
  * @param {object} [opts]
- * @param {string} [opts.timeRange]   - Currently-selected time range id.
- * @param {boolean} [opts.showFilter] - Render the time range dropdown.
+ * @param {string}  [opts.timeRange]   - Currently-selected time range id.
+ * @param {boolean} [opts.expanded]    - Show all entries vs. collapsed (3).
+ * @param {boolean} [opts.showFilter]  - Render the time range dropdown.
  */
 export function doneCanvas(entries, opts = {}) {
   const timeRange = opts.timeRange || DEFAULT_TIME_RANGE;
+  const expanded = Boolean(opts.expanded);
   const showFilter = opts.showFilter !== false;
   const range = rangeFor(timeRange);
-  // Show category badge per item only when no category filter is active —
-  // otherwise every row repeats the same category and looks noisy.
   const showCategoryBadge = !config.featurebase.category;
+
+  const total = entries.length;
+  const visible = expanded ? entries : entries.slice(0, COLLAPSED_COUNT);
+  const hiddenCount = Math.max(total - visible.length, 0);
 
   const components = [
     {
@@ -103,7 +108,7 @@ export function doneCanvas(entries, opts = {}) {
     {
       type: 'text',
       id: 'subhead',
-      text: subheadText(entries.length, range),
+      text: subheadText(total, range),
       style: 'muted',
     },
   ];
@@ -124,7 +129,7 @@ export function doneCanvas(entries, opts = {}) {
 
   components.push({ type: 'spacer', id: 'sp_list', size: 'xs' });
 
-  if (entries.length === 0) {
+  if (total === 0) {
     components.push({
       type: 'text',
       id: 'empty',
@@ -133,7 +138,7 @@ export function doneCanvas(entries, opts = {}) {
       style: 'muted',
     });
   } else {
-    const items = entries.map((e) => {
+    const items = visible.map((e) => {
       const subtitle = entrySubtitle(e, { showCategory: showCategoryBadge });
       const image = extractImage(e);
       const item = {
@@ -152,6 +157,28 @@ export function doneCanvas(entries, opts = {}) {
     components.push({ type: 'list', id: 'shipped_list', items });
   }
 
+  // See more / Show less toggle. Only render when there's something to toggle.
+  if (total > COLLAPSED_COUNT) {
+    components.push({ type: 'spacer', id: 'sp_toggle', size: 'xs' });
+    if (!expanded) {
+      components.push({
+        type: 'button',
+        id: 'see_more',
+        label: `Show ${hiddenCount} more ↓`,
+        style: 'link',
+        action: { type: 'submit' },
+      });
+    } else {
+      components.push({
+        type: 'button',
+        id: 'show_less',
+        label: 'Show less ↑',
+        style: 'link',
+        action: { type: 'submit' },
+      });
+    }
+  }
+
   components.push(
     { type: 'spacer', id: 'sp_footer', size: 'xs' },
     {
@@ -163,7 +190,14 @@ export function doneCanvas(entries, opts = {}) {
     },
   );
 
-  return { canvas: { content: { components } } };
+  // Persist UI state across Intercom submits. Canvas Kit requires all values
+  // in stored_data to be strings.
+  const stored_data = {
+    expanded: expanded ? 'true' : 'false',
+    time_range: timeRange,
+  };
+
+  return { canvas: { content: { components }, stored_data } };
 }
 
 function subheadText(count, range) {

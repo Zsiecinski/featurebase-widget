@@ -127,22 +127,39 @@ app.get('/', (_req, res) => {
 </html>`);
 });
 
-// On every Intercom request (init + submit) we read the current filter state
-// from input_values (set when the dropdown submits) and re-render.
-function readTimeRange(req) {
-  const id = req.body?.input_values?.time_range;
-  if (!id) return DEFAULT_TIME_RANGE;
-  // Validate against known options to avoid passing arbitrary input through.
-  const matched = rangeFor(id);
-  return matched.id;
+// Pull the current UI state out of Intercom's request payload.
+//
+// Two sources contribute:
+//   - current_canvas.stored_data: what /submit echoed last time. Always strings.
+//   - input_values: only present when a user-interactive component fired (e.g.
+//     the time_range dropdown sends the new selection here).
+//
+// Buttons fire /submit via component_id. We detect "see_more" / "show_less"
+// clicks and flip the expanded flag without otherwise touching state.
+function readCanvasState(req) {
+  const stored = req.body?.current_canvas?.stored_data || {};
+  const input = req.body?.input_values || {};
+  const componentId = req.body?.component_id;
+
+  // Time range: input_values (just changed) > stored_data (preserved) > default.
+  const timeRangeId =
+    input.time_range || stored.time_range || DEFAULT_TIME_RANGE;
+  const timeRange = rangeFor(timeRangeId).id;
+
+  // Expanded flag: button clicks override; otherwise echo stored value.
+  let expanded = stored.expanded === 'true';
+  if (componentId === 'see_more') expanded = true;
+  if (componentId === 'show_less') expanded = false;
+
+  return { timeRange, expanded };
 }
 
 async function renderDoneCanvas(req, res) {
-  const timeRange = readTimeRange(req);
+  const { timeRange, expanded } = readCanvasState(req);
   const range = rangeFor(timeRange);
   try {
     const entries = await getChangelogs({ daysBack: range.days });
-    res.send(doneCanvas(entries, { timeRange }));
+    res.send(doneCanvas(entries, { timeRange, expanded }));
   } catch (err) {
     console.error('[featurebase] failed:', err.message);
     res.send(errorCanvas());
