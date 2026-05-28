@@ -1,50 +1,72 @@
 import { config } from './config.js';
 
+// Format upvote count as a short, scannable subtitle line for each list item.
+function postSubtitle(p) {
+  const parts = [];
+  if (typeof p.upvotes === 'number' && p.upvotes > 0) {
+    parts.push(`${p.upvotes} ${p.upvotes === 1 ? 'upvote' : 'upvotes'}`);
+  }
+  if (typeof p.commentCount === 'number' && p.commentCount > 0) {
+    parts.push(`${p.commentCount} ${p.commentCount === 1 ? 'comment' : 'comments'}`);
+  }
+  return parts.join(' · ');
+}
+
 export function doneCanvas(posts) {
   const components = [
     {
       type: 'text',
       id: 'header',
-      text: '✅ Recently Shipped',
-      align: 'center',
+      text: 'Recently shipped',
       style: 'header',
     },
+    {
+      type: 'text',
+      id: 'subheader',
+      text: 'Features we just launched. Tap an item for details.',
+      style: 'muted',
+    },
+    { type: 'spacer', id: 'spacer_top', size: 'xs' },
   ];
 
   if (posts.length === 0) {
     components.push({
       type: 'text',
       id: 'empty',
-      text: 'Nothing here yet — check back soon!',
+      text: 'Nothing shipped yet — check back soon!',
       align: 'center',
       style: 'muted',
     });
   } else {
-    for (const p of posts) {
-      components.push({
-        type: 'text',
-        id: `title_${p.id}`,
-        text: `**${p.title}**`,
-        style: 'paragraph',
-      });
-      components.push({
-        type: 'button',
-        id: `view_${p.id}`,
-        label: 'View details',
-        style: 'link',
+    const items = posts.map((p) => {
+      const subtitle = postSubtitle(p);
+      const item = {
+        type: 'item',
+        id: `item_${p.id}`,
+        title: p.title,
         action: { type: 'url', url: p.postUrl },
-      });
-      components.push({ type: 'divider', id: `div_${p.id}` });
-    }
+      };
+      if (subtitle) item.subtitle = subtitle;
+      return item;
+    });
+
+    components.push({
+      type: 'list',
+      id: 'shipped_list',
+      items,
+    });
   }
 
-  components.push({
-    type: 'button',
-    id: 'full_roadmap',
-    label: 'See full roadmap',
-    style: 'secondary',
-    action: { type: 'url', url: config.roadmapUrl },
-  });
+  components.push(
+    { type: 'spacer', id: 'spacer_bottom', size: 'xs' },
+    {
+      type: 'button',
+      id: 'full_roadmap',
+      label: 'See full roadmap',
+      style: 'primary',
+      action: { type: 'url', url: config.roadmapUrl },
+    },
+  );
 
   return { canvas: { content: { components } } };
 }
@@ -56,16 +78,22 @@ export function errorCanvas() {
         components: [
           {
             type: 'text',
-            id: 'err',
-            text: "Couldn't load the roadmap right now.",
-            align: 'center',
-            style: 'error',
+            id: 'err_title',
+            text: "Couldn't load the roadmap",
+            style: 'header',
           },
+          {
+            type: 'text',
+            id: 'err_body',
+            text: 'We hit a snag fetching the latest shipped items. Try again in a moment.',
+            style: 'muted',
+          },
+          { type: 'spacer', id: 'err_spacer', size: 'xs' },
           {
             type: 'button',
             id: 'full_roadmap',
             label: 'Open roadmap',
-            style: 'secondary',
+            style: 'primary',
             action: { type: 'url', url: config.roadmapUrl },
           },
         ],

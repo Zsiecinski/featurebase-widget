@@ -12,15 +12,21 @@ export const mockPosts = [
     id: 'mock_p1',
     title: 'Bulk size chart import via CSV',
     postUrl: 'https://staytuned.featurebase.app/p/mock-bulk-import',
+    upvotes: 47,
+    commentCount: 12,
   },
   {
     id: 'mock_p2',
     title: 'Shopify Markets multi-currency support',
     postUrl: 'https://staytuned.featurebase.app/p/mock-shopify-markets',
+    upvotes: 23,
+    commentCount: 4,
   },
   {
     id: 'mock_p3',
     title: 'AI-generated size recommendations v2',
     postUrl: 'https://staytuned.featurebase.app/p/mock-ai-recs-v2',
+    upvotes: 89,
+    commentCount: 21,
   },
 ];
