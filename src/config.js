@@ -10,13 +10,20 @@ export const config = {
     version: process.env.FEATUREBASE_VERSION || '2026-01-01.nova',
     timeoutMs: Number(process.env.FEATUREBASE_TIMEOUT_MS) || 5000,
     retries: Number(process.env.FEATUREBASE_RETRIES) || 2,
-    // Optional. Restricts the Done list to a single Featurebase board.
-    // Accepts either a board ID (24-char hex) or a board-name substring
-    // (case-insensitive). Empty = show completed posts from every board.
-    // Lazy getter so tests can mutate process.env between calls without
-    // re-importing the module graph.
-    get board() {
-      return process.env.FEATUREBASE_BOARD || '';
+    // Optional. Restricts the changelog feed to one category by name.
+    // The Featurebase /v2/changelogs API filters by category name string,
+    // e.g. "Kiwi Size Chart & Recommender". Substring partial-matches are
+    // NOT supported server-side here (unlike the old board lookup); pass the
+    // category name exactly as it appears in Featurebase.
+    // Empty = show every live changelog entry across all categories.
+    // Accepts the deprecated FEATUREBASE_BOARD name for migration.
+    // Lazy getter so tests can mutate process.env between calls.
+    get category() {
+      return (
+        process.env.FEATUREBASE_CATEGORY ||
+        process.env.FEATUREBASE_BOARD ||
+        ''
+      );
     },
   },
   roadmapUrl:

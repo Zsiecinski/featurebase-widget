@@ -1,12 +1,5 @@
 import { config } from './config.js';
-import { mockPosts, mockStatuses } from './mock.js';
-
-let completedStatusIdCache = null;
-let boardIdCache = null;
-
-// Featurebase IDs are 24-char hex (MongoDB ObjectId). If the user pasted one
-// directly into FEATUREBASE_BOARD, skip the name-lookup step.
-const OBJECT_ID = /^[a-f0-9]{24}$/i;
+import { mockChangelogs } from './mock.js';
 
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
@@ -48,74 +41,29 @@ async function fb(path, { retries = 0 } = {}) {
   throw lastErr;
 }
 
-export async function getCompletedStatusId() {
-  if (config.mock) {
-    return mockStatuses.find((s) => s.type === 'completed').id;
-  }
-  if (completedStatusIdCache) return completedStatusIdCache;
-
-  const data = await fb('/v2/post_statuses', {
-    retries: config.featurebase.retries,
-  });
-  // Per Featurebase docs, /v2/post_statuses returns a bare array — unlike
-  // /v2/posts which returns { data: [...] }. Accept both shapes defensively.
-  const list = Array.isArray(data) ? data : data.data || [];
-  const done = list.find((s) => s.type === 'completed');
-  if (!done) throw new Error("No status with type 'completed' found");
-  completedStatusIdCache = done.id;
-  return done.id;
-}
-
-export async function getBoardId() {
-  if (config.mock) return null;
-  if (!config.featurebase.board) return null;
-  if (boardIdCache) return boardIdCache;
-
-  // Already a board ID? Use it directly.
-  if (OBJECT_ID.test(config.featurebase.board)) {
-    boardIdCache = config.featurebase.board;
-    return boardIdCache;
-  }
-
-  // Otherwise look up by name substring.
-  const data = await fb('/v2/boards', {
-    retries: config.featurebase.retries,
-  });
-  // /v2/boards returns a bare array, same shape as /v2/post_statuses.
-  const list = Array.isArray(data) ? data : data.data || [];
-  const needle = config.featurebase.board.toLowerCase();
-  const match = list.find((b) => (b.name || '').toLowerCase().includes(needle));
-  if (!match) {
-    const names = list.map((b) => `"${b.name}"`).join(', ');
-    throw new Error(
-      `No Featurebase board matches "${config.featurebase.board}". Available: ${names}`,
-    );
-  }
-  boardIdCache = match.id;
-  return boardIdCache;
-}
-
-export async function getDonePosts() {
-  if (config.mock) return mockPosts;
-
-  const [statusId, boardId] = await Promise.all([
-    getCompletedStatusId(),
-    getBoardId(),
-  ]);
+/**
+ * Fetches recent published changelog entries from Featurebase.
+ *
+ * /v2/changelogs is purpose-built for the "what we shipped, customer-facing"
+ * use case — entries are curated, dated, and visible on the org's public
+ * changelog page. Avoids the noise of /v2/posts + status=completed, which
+ * leaks every internally-closed feedback item across every board.
+ */
+export async function getChangelogs() {
+  if (config.mock) return mockChangelogs;
 
   const qs = new URLSearchParams({
-    statusId,
-    sortBy: 'recent',
+    state: 'live',
+    sortBy: 'date',
     sortOrder: 'desc',
     limit: String(config.maxItems),
   });
-  if (boardId) qs.set('boardId', boardId);
+  if (config.featurebase.category) {
+    qs.set('categories', config.featurebase.category);
+  }
 
-  const data = await fb(`/v2/posts?${qs.toString()}`);
+  const data = await fb(`/v2/changelogs?${qs.toString()}`, {
+    retries: config.featurebase.retries,
+  });
   return data.data || [];
-}
-
-export function _resetCacheForTests() {
-  completedStatusIdCache = null;
-  boardIdCache = null;
 }

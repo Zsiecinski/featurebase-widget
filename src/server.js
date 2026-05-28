@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import { getDonePosts } from './featurebase.js';
+import { getChangelogs } from './featurebase.js';
 import { doneCanvas, errorCanvas } from './canvas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -129,8 +129,8 @@ app.get('/', (_req, res) => {
 
 async function renderDoneCanvas(_req, res) {
   try {
-    const posts = await getDonePosts();
-    res.send(doneCanvas(posts));
+    const entries = await getChangelogs();
+    res.send(doneCanvas(entries));
   } catch (err) {
     console.error('[featurebase] failed:', err.message);
     res.send(errorCanvas());
