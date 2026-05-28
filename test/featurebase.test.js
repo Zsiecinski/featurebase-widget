@@ -53,26 +53,31 @@ test('getChangelogs: returns [] when API returns empty data array', async () => 
   assert.deepEqual(out, []);
 });
 
-test('getChangelogs: includes categories= when FEATUREBASE_CATEGORY is set', async () => {
-  process.env.FEATUREBASE_CATEGORY = 'Kiwi Size Chart & Recommender';
+test('getChangelogs: filters by category substring client-side (case-insensitive)', async () => {
+  process.env.FEATUREBASE_CATEGORY = 'kiwi';
   try {
-    let capturedUrl;
-    stubFetch(async (url) => {
-      capturedUrl = url;
-      return jsonResponse({ data: [] });
-    });
+    stubFetch(async () =>
+      jsonResponse({
+        data: [
+          { id: '1', title: 'Tickets thing', categories: ['Tickets & Events'] },
+          { id: '2', title: 'Kiwi thing A', categories: ['Kiwi Size Chart & Recommender'] },
+          { id: '3', title: 'General thing', categories: ['General feedback'] },
+          { id: '4', title: 'Kiwi thing B', categories: [{ name: 'Kiwi Size Chart & Recommender' }] },
+          { id: '5', title: 'Multi-cat', categories: ['Other', 'Kiwi Size Chart & Recommender'] },
+        ],
+      }),
+    );
 
-    await getChangelogs();
-    assert.match(capturedUrl, /categories=Kiwi/);
-    // & is URL-encoded
-    assert.match(capturedUrl, /categories=Kiwi\+Size\+Chart\+%26\+Recommender/);
+    const out = await getChangelogs();
+    assert.equal(out.length, 3, 'should return only Kiwi-tagged entries');
+    assert.deepEqual(out.map((e) => e.id).sort(), ['2', '4', '5']);
   } finally {
     delete process.env.FEATUREBASE_CATEGORY;
   }
 });
 
-test('getChangelogs: falls back to deprecated FEATUREBASE_BOARD env var', async () => {
-  process.env.FEATUREBASE_BOARD = 'Legacy Board Name';
+test('getChangelogs: fetches a wider batch when filtering client-side', async () => {
+  process.env.FEATUREBASE_CATEGORY = 'Kiwi';
   try {
     let capturedUrl;
     stubFetch(async (url) => {
@@ -81,7 +86,31 @@ test('getChangelogs: falls back to deprecated FEATUREBASE_BOARD env var', async 
     });
 
     await getChangelogs();
-    assert.match(capturedUrl, /categories=Legacy\+Board\+Name/);
+    // limit=8 (config.maxItems) when no filter, but bumped to ~50 when filtering
+    // so we don't miss matches.
+    assert.match(capturedUrl, /limit=50/);
+    // The category param should NOT be sent — filtering is local.
+    assert.doesNotMatch(capturedUrl, /categories=/);
+  } finally {
+    delete process.env.FEATUREBASE_CATEGORY;
+  }
+});
+
+test('getChangelogs: deprecated FEATUREBASE_BOARD env var still works as a fallback', async () => {
+  process.env.FEATUREBASE_BOARD = 'kiwi';
+  try {
+    stubFetch(async () =>
+      jsonResponse({
+        data: [
+          { id: '1', title: 'Match', categories: ['Kiwi Size Chart & Recommender'] },
+          { id: '2', title: 'No match', categories: ['Tickets'] },
+        ],
+      }),
+    );
+
+    const out = await getChangelogs();
+    assert.equal(out.length, 1);
+    assert.equal(out[0].id, '1');
   } finally {
     delete process.env.FEATUREBASE_BOARD;
   }

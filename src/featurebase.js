@@ -48,22 +48,46 @@ async function fb(path, { retries = 0 } = {}) {
  * use case — entries are curated, dated, and visible on the org's public
  * changelog page. Avoids the noise of /v2/posts + status=completed, which
  * leaks every internally-closed feedback item across every board.
+ *
+ * Category filtering is done client-side via case-insensitive substring
+ * match. That way FEATUREBASE_CATEGORY="Kiwi" matches a category literally
+ * named "Kiwi Size Chart & Recommender" without the user having to know
+ * the exact string. We fetch a wider batch from the API and slice locally.
  */
+const CLIENT_FILTER_FETCH_LIMIT = 50;
+
+function matchesCategory(entry, needle) {
+  if (!needle) return true;
+  const n = needle.toLowerCase();
+  const categories = entry.categories || [];
+  return categories.some((c) => {
+    // Featurebase docs don't specify whether `categories` is an array of
+    // strings or objects. Handle both.
+    const name = typeof c === 'string' ? c : c?.name || '';
+    return name.toLowerCase().includes(n);
+  });
+}
+
 export async function getChangelogs() {
   if (config.mock) return mockChangelogs;
+
+  const needle = config.featurebase.category;
+  const apiLimit = needle ? CLIENT_FILTER_FETCH_LIMIT : config.maxItems;
 
   const qs = new URLSearchParams({
     state: 'live',
     sortBy: 'date',
     sortOrder: 'desc',
-    limit: String(config.maxItems),
+    limit: String(apiLimit),
   });
-  if (config.featurebase.category) {
-    qs.set('categories', config.featurebase.category);
-  }
 
   const data = await fb(`/v2/changelogs?${qs.toString()}`, {
     retries: config.featurebase.retries,
   });
-  return data.data || [];
+  const all = data.data || [];
+
+  if (!needle) return all.slice(0, config.maxItems);
+
+  const filtered = all.filter((entry) => matchesCategory(entry, needle));
+  return filtered.slice(0, config.maxItems);
 }
