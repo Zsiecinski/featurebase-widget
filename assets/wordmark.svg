@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 200" role="img" aria-label="Loop">
+  <defs>
+    <linearGradient id="wmBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon -->
+  <g transform="translate(20,20)">
+    <rect width="160" height="160" rx="36" ry="36" fill="url(#wmBg)"/>
+    <path d="M41 84 L70 112 L120 56"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="18"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="210" y="135"
+        font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+        font-size="124"
+        font-weight="700"
+        letter-spacing="-4"
+        fill="#0F172A">Loop</text>
+</svg>

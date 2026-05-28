@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Loop — close the feedback loop in Messenger">
+  <defs>
+    <linearGradient id="ogBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E1B4B"/>
+      <stop offset="100%" stop-color="#0F0A2E"/>
+    </linearGradient>
+    <linearGradient id="ogIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+    <radialGradient id="ogGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#ogBg)"/>
+  <circle cx="200" cy="540" r="380" fill="url(#ogGlow)"/>
+
+  <!-- Icon, left side -->
+  <g transform="translate(96,175)">
+    <rect width="280" height="280" rx="62" ry="62" fill="url(#ogIcon)"/>
+    <path d="M72 147 L121 197 L210 97"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="32"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
+
+  <!-- Text block, right side -->
+  <g font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+    <text x="448" y="285"
+          font-size="124"
+          font-weight="700"
+          letter-spacing="-5"
+          fill="#FFFFFF">Loop</text>
+    <text x="450" y="355"
+          font-size="34"
+          font-weight="500"
+          letter-spacing="-0.5"
+          fill="#C7D2FE">Close the feedback loop in Messenger.</text>
+    <text x="450" y="450"
+          font-size="22"
+          font-weight="500"
+          letter-spacing="0.5"
+          fill="#818CF8"
+          opacity="0.85">FEATUREBASE  ·  INTERCOM CANVAS KIT</text>
+  </g>
+</svg>

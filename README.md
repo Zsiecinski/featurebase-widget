@@ -1,8 +1,22 @@
-# featurebase-intercom
+<p align="center">
+  <img src="assets/wordmark.svg" alt="Loop" width="320">
+</p>
 
-Intercom Canvas Kit Messenger app that surfaces the **Done** column of the
-Staytuned Featurebase roadmap (`/roadmap/kiwi-sizing`) inside the Intercom chat
-widget.
+<p align="center">
+  <strong>Close the feedback loop in Messenger.</strong><br>
+  Intercom Canvas Kit app that surfaces your Featurebase <em>Done</em> roadmap column inside the Intercom chat widget.
+</p>
+
+<p align="center">
+  <img src="assets/og.png" alt="Loop — Featurebase roadmap for Intercom" width="600">
+</p>
+
+---
+
+## What it does
+
+Surfaces the **Done** column of the Staytuned Featurebase roadmap
+(`/roadmap/kiwi-sizing`) inside the Intercom Messenger as a Canvas Kit card.
 
 - `POST /initialize` – rendered when a user opens the app in Messenger.
 - `POST /submit`     – Intercom requires this even when the app has no form.
