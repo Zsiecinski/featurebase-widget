@@ -102,10 +102,15 @@ function typeBadgeText(entry) {
   return icon ? `${icon} ${badge}` : badge;
 }
 
+// Badge moves to the title field so it inherits the bold styling of titles
+// and reads like a chip. Subtitle drops to metadata only (date + comments).
+function entryTitle(entry) {
+  const badge = typeBadgeText(entry);
+  return badge ? `${badge} · ${entry.title}` : entry.title;
+}
+
 function entrySubtitle(entry, { showBoard } = {}) {
   const parts = [];
-  const badge = typeBadgeText(entry);
-  if (badge) parts.push(badge);
   if (showBoard) {
     const board = boardCategoryName(entry);
     if (board) parts.push(board);
@@ -196,7 +201,7 @@ export function homeCanvas(entries, opts = {}) {
       const item = {
         type: 'item',
         id: `item_${e.id}`,
-        title: e.title,
+        title: entryTitle(e),
         // Submit action replaces the current canvas with the detail view.
         // Intercom POSTs to /submit with component_id="item_<entryId>" — the
         // server parses the id and returns detailCanvas(entry).

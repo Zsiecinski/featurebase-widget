@@ -130,12 +130,20 @@ test('typeBadge: extracts NEW / IMPROVED / FIXED in upper case', () => {
   assert.equal(typeBadge({}), '');
 });
 
-test('homeCanvas: subtitle carries colored-emoji + type word', () => {
+test('homeCanvas: title now carries the colored badge for bold visual weight', () => {
   const out = homeCanvas(sampleEntries);
   const list = comp(out).find((c) => c.type === 'list');
-  assert.match(list.items.find((i) => i.id === 'item_a').subtitle, /^🟢 NEW · /);
-  assert.match(list.items.find((i) => i.id === 'item_b').subtitle, /^🟣 IMPROVED · /);
-  assert.match(list.items.find((i) => i.id === 'item_c').subtitle, /^🟠 FIXED · /);
+  assert.match(list.items.find((i) => i.id === 'item_a').title, /^🟢 NEW · Alpha shipped$/);
+  assert.match(list.items.find((i) => i.id === 'item_b').title, /^🟣 IMPROVED · Beta shipped$/);
+  assert.match(list.items.find((i) => i.id === 'item_c').title, /^🟠 FIXED · Gamma shipped$/);
+});
+
+test('homeCanvas: subtitle no longer includes badge (it moved to title)', () => {
+  const out = homeCanvas(sampleEntries);
+  const list = comp(out).find((c) => c.type === 'list');
+  const itemA = list.items.find((i) => i.id === 'item_a');
+  assert.doesNotMatch(itemA.subtitle || '', /NEW|IMPROVED|FIXED/);
+  assert.doesNotMatch(itemA.subtitle || '', /🟢|🟣|🟠/);
 });
 
 test('homeCanvas: item.image only set when entry has featuredImage', () => {
