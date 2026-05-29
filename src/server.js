@@ -145,7 +145,12 @@ function readState(req) {
 // Defaults are picked so empty/missing values reproduce current behavior —
 // installers who don't change anything see Loop exactly as it is now.
 function readConfig(req) {
-  const opts = req.body?.card_creation_options || {};
+  // Different Canvas Kit versions use different field names for the
+  // persisted-config payload. Check both, prefer card_creation_options.
+  const opts = req.body?.card_creation_options
+    || req.body?.results
+    || req.body?.input_values
+    || {};
   return {
     // Toggles
     showPills: opts.show_pills !== 'false',                 // default true
@@ -184,6 +189,11 @@ async function renderCanvas(req, res) {
   // card_creation_options and acknowledge. Empty text values are stored as
   // empty strings, which readConfig() interprets as "use the default."
   if (componentId === 'save_config') {
+    // Diagnostic: log the full save request so we can see what fields
+    // Intercom sends and where it expects the response to live. Remove
+    // once the configure flow is confirmed working.
+    console.log('[loop] save_config request body:', JSON.stringify(req.body, null, 2));
+
     const v = req.body?.input_values || {};
     const saved = {
       show_pills: v.show_pills === 'false' ? 'false' : 'true',
@@ -369,29 +379,44 @@ function configSavedCanvas(saved) {
   if (saved.show_comments === 'false') summary.push('Comment counts are hidden.');
   if (saved.header_text) summary.push(`Header text: "${saved.header_text}".`);
 
-  return {
-    canvas: {
-      content: {
-        components: [
-          { type: 'text', id: 'cfg_ok', text: 'Settings saved', style: 'header' },
-          {
-            type: 'text',
-            id: 'cfg_ok_body',
-            text: summary.length > 0
-              ? summary.join(' ')
-              : 'Loop will render with the default settings.',
-            style: 'paragraph',
-          },
-        ],
-      },
+  const canvas = {
+    content: {
+      components: [
+        { type: 'text', id: 'cfg_ok', text: 'Settings saved', style: 'header' },
+        {
+          type: 'text',
+          id: 'cfg_ok_body',
+          text: summary.length > 0
+            ? summary.join(' ')
+            : 'Loop will render with the default settings.',
+          style: 'paragraph',
+        },
+      ],
     },
-    // Intercom persists every key here for the lifetime of the card instance,
-    // and passes them back to us in card_creation_options on every render.
+    // stored_data is per-card-session, not per-instance — but if Intercom's
+    // config flow happens to read from here too, it's harmless to mirror.
+    stored_data: saved,
+  };
+
+  // Intercom Canvas Kit has used different field names across versions:
+  // - card_creation_options (older)
+  // - results (newer, simpler)
+  // Sending both maximizes the chance of one being recognized. Whichever
+  // Intercom honours, our readConfig() handles both on the way back.
+  return {
+    canvas,
     card_creation_options: saved,
+    results: saved,
+    // Event signal Intercom sometimes uses to "complete" the configure flow
+    // and return the teammate to the previous screen.
+    event: { type: 'completed' },
   };
 }
 
 app.post('/configure', (req, res) => {
+  // Diagnostic: log what Intercom sends to /configure so we can verify the
+  // teammate-saved options come back to us correctly on a re-open.
+  console.log('[loop] /configure request body keys:', Object.keys(req.body || {}));
   res.set('Cache-Control', 'no-store');
   res.send(configureCanvas(readConfig(req)));
 });
