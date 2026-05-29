@@ -68,23 +68,16 @@ function matchesCategory(entry, needle) {
   });
 }
 
-// Mirror Featurebase's own public-board visibility logic so Loop never shows
-// an entry the org has explicitly hidden. Two flags matter:
-//
-//   notifications.<locale>.hideFromBoardAndWidgets === true
-//     Set when a publisher ticks "Hide from changelog board / widget embeds"
-//     — typically because the entry's only meant to be an email broadcast.
-//     The public /changelog page filters these out; we do the same.
-//
-//   allowedSegmentIds.length > 0
-//     Entry is restricted to specific user segments. Loop doesn't have a
-//     Featurebase-segment ↔ Intercom-user mapping, so we can't reliably tell
-//     whether the viewing user qualifies. Safest default: don't show.
+// Respect Featurebase's "hide from board/widgets" flag — that's the publisher
+// explicitly opting an entry out of public surfaces. Segment restrictions
+// (allowedSegmentIds) are NOT enforced: Loop's stance is "show what was
+// shipped, let viewers self-select." Segment targeting is a publisher-side
+// concern; from a customer-support widget perspective, knowing "we shipped a
+// fix" matters more than gating it by an opaque segment we can't map.
 function isPubliclyVisible(entry) {
   const localeKey = entry.locale || 'en';
   const note = entry.notifications?.[localeKey] || {};
   if (note.hideFromBoardAndWidgets === true) return false;
-  if ((entry.allowedSegmentIds || []).length > 0) return false;
   return true;
 }
 

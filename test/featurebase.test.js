@@ -108,7 +108,7 @@ test('getChangelogs: hides entries with notifications.<locale>.hideFromBoardAndW
   assert.equal(out[0].id, 'visible');
 });
 
-test('getChangelogs: hides entries with allowedSegmentIds populated', async () => {
+test('getChangelogs: still shows segment-restricted entries (Loop does not enforce audience)', async () => {
   stubFetch(async () =>
     jsonResponse({
       data: [
@@ -119,8 +119,10 @@ test('getChangelogs: hides entries with allowedSegmentIds populated', async () =
   );
 
   const out = await getChangelogs();
-  assert.equal(out.length, 1);
-  assert.equal(out[0].id, 'unrestricted');
+  assert.equal(out.length, 2);
+  // Both entries surface; segment-restriction is a publisher-side concern Loop
+  // intentionally does not enforce (no Featurebase-segment <-> Intercom-user
+  // mapping available). hideFromBoardAndWidgets is the only respected gate.
 });
 
 test('getChangelogs: missing notifications object is treated as visible', async () => {

@@ -38,17 +38,40 @@ function extractImage(entry) {
   return null;
 }
 
-function firstCategoryName(entry) {
-  const c = (entry.categories || [])[0];
-  if (!c) return '';
-  return typeof c === 'string' ? c : c.name || '';
+// Featurebase tags each changelog entry with one of three "type" categories
+// alongside its board category. We surface the type as a visible badge so
+// readers can see the New/Improved/Fixed split at a glance, matching
+// Featurebase's public-board styling.
+const TYPE_CATEGORIES = new Set(['new', 'improved', 'fixed']);
+
+function categoryNames(entry) {
+  return (entry.categories || []).map((c) =>
+    typeof c === 'string' ? c : c?.name || '',
+  );
 }
 
-function entrySubtitle(entry, { showCategory } = {}) {
+export function typeBadge(entry) {
+  const names = categoryNames(entry);
+  for (const name of names) {
+    if (TYPE_CATEGORIES.has(name.toLowerCase())) {
+      return name.toUpperCase();
+    }
+  }
+  return '';
+}
+
+function boardCategoryName(entry) {
+  const names = categoryNames(entry);
+  return names.find((name) => !TYPE_CATEGORIES.has(name.toLowerCase())) || '';
+}
+
+function entrySubtitle(entry, { showBoard } = {}) {
   const parts = [];
-  if (showCategory) {
-    const cat = firstCategoryName(entry);
-    if (cat) parts.push(cat);
+  const badge = typeBadge(entry);
+  if (badge) parts.push(badge);
+  if (showBoard) {
+    const board = boardCategoryName(entry);
+    if (board) parts.push(board);
   }
   const when = formatShippedDate(entry.date);
   if (when) parts.push(`Shipped ${when}`);
@@ -99,7 +122,9 @@ function truncate(text, limit) {
  */
 export function homeCanvas(entries, opts = {}) {
   const expanded = Boolean(opts.expanded);
-  const showCategoryBadge = !config.featurebase.category;
+  // Show the board category name (e.g. "Kiwi Sizing") only when no
+  // category filter is set — otherwise every row repeats the same value.
+  const showBoardName = !config.featurebase.category;
 
   const total = entries.length;
   const visible = expanded ? entries : entries.slice(0, COLLAPSED_COUNT);
@@ -126,7 +151,7 @@ export function homeCanvas(entries, opts = {}) {
     });
   } else {
     const items = visible.map((e) => {
-      const subtitle = entrySubtitle(e, { showCategory: showCategoryBadge });
+      const subtitle = entrySubtitle(e, { showBoard: showBoardName });
       const image = extractImage(e);
       const item = {
         type: 'item',
@@ -233,10 +258,12 @@ export function detailCanvas(entry, opts = {}) {
   });
 
   const meta = [];
+  const badge = typeBadge(entry);
+  if (badge) meta.push(badge);
   const when = formatShippedDate(entry.date);
   if (when) meta.push(`Shipped ${when}`);
-  const cat = firstCategoryName(entry);
-  if (cat) meta.push(cat);
+  const board = boardCategoryName(entry);
+  if (board) meta.push(board);
   if (typeof entry.commentCount === 'number' && entry.commentCount > 0) {
     meta.push(`${entry.commentCount} ${entry.commentCount === 1 ? 'comment' : 'comments'}`);
   }

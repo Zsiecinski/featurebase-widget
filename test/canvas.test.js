@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { homeCanvas, detailCanvas, errorCanvas, COLLAPSED_COUNT } from '../src/canvas.js';
+import { homeCanvas, detailCanvas, errorCanvas, typeBadge, COLLAPSED_COUNT } from '../src/canvas.js';
 
 const day = 86400 * 1000;
 const now = Date.now();
@@ -13,7 +13,7 @@ const sampleEntries = [
     url: 'https://example.com/a',
     date: iso(0),
     commentCount: 5,
-    categories: ['Kiwi Sizing'],
+    categories: ['New', 'Kiwi Sizing'],
     featuredImage: 'https://example.com/a.png',
   },
   {
@@ -21,7 +21,7 @@ const sampleEntries = [
     title: 'Beta shipped',
     url: 'https://example.com/b',
     date: iso(3 * day),
-    categories: [{ name: 'Kiwi Sizing' }],
+    categories: [{ name: 'Improved' }, { name: 'Kiwi Sizing' }],
   },
   {
     id: 'c',
@@ -29,6 +29,7 @@ const sampleEntries = [
     url: 'https://example.com/c',
     date: iso(60 * day),
     commentCount: 1,
+    categories: ['Fixed', 'Kiwi Sizing'],
   },
 ];
 
@@ -115,6 +116,63 @@ test('homeCanvas: featuredImage attaches as item.image (string + object shapes)'
   const list = comp(out).find((c) => c.type === 'list');
   assert.equal(list.items.find((i) => i.id === 'item_a').image, 'https://example.com/a.png');
   assert.equal(list.items.find((i) => i.id === 'item_b').image, undefined);
+});
+
+test('typeBadge: extracts NEW / IMPROVED / FIXED in upper case', () => {
+  assert.equal(typeBadge({ categories: ['New', 'Kiwi Sizing'] }), 'NEW');
+  assert.equal(typeBadge({ categories: ['Improved', 'Kiwi Sizing'] }), 'IMPROVED');
+  assert.equal(typeBadge({ categories: ['Fixed', 'Kiwi Sizing'] }), 'FIXED');
+  // Mixed case input
+  assert.equal(typeBadge({ categories: ['fixed'] }), 'FIXED');
+  // Object-shaped categories
+  assert.equal(typeBadge({ categories: [{ name: 'Improved' }] }), 'IMPROVED');
+  // No type tag → empty
+  assert.equal(typeBadge({ categories: ['Kiwi Sizing'] }), '');
+  // Missing categories
+  assert.equal(typeBadge({}), '');
+});
+
+test('homeCanvas: each item subtitle leads with its type badge', () => {
+  const out = homeCanvas(sampleEntries);
+  const list = comp(out).find((c) => c.type === 'list');
+  const itemA = list.items.find((i) => i.id === 'item_a');
+  const itemB = list.items.find((i) => i.id === 'item_b');
+  const itemC = list.items.find((i) => i.id === 'item_c');
+  // Badge prefixes the subtitle. Board name follows since no category filter.
+  assert.match(itemA.subtitle, /^NEW · /);
+  assert.match(itemB.subtitle, /^IMPROVED · /);
+  assert.match(itemC.subtitle, /^FIXED · /);
+});
+
+test('homeCanvas: subtitle hides board name when category filter is set', async () => {
+  process.env.FEATUREBASE_CATEGORY = 'Kiwi';
+  try {
+    const { homeCanvas: hc } = await import(`../src/canvas.js?env=${Date.now()}`);
+    const out = hc(sampleEntries);
+    const itemA = out.canvas.content.components
+      .find((c) => c.type === 'list')
+      .items.find((i) => i.id === 'item_a');
+    // Type badge still present, board name gone
+    assert.match(itemA.subtitle, /^NEW · /);
+    assert.doesNotMatch(itemA.subtitle, /Kiwi Sizing/);
+  } finally {
+    delete process.env.FEATUREBASE_CATEGORY;
+  }
+});
+
+test('detailCanvas: meta line leads with type badge', () => {
+  const entry = {
+    id: 'x',
+    title: 'Big new thing',
+    url: 'https://x.test',
+    date: iso(2 * day),
+    categories: ['New', 'Kiwi Sizing'],
+    commentCount: 3,
+  };
+  const out = detailCanvas(entry);
+  const meta = comp(out).find((c) => c.id === 'd_meta');
+  assert.match(meta.text, /^NEW · /);
+  assert.match(meta.text, /Kiwi Sizing/);
 });
 
 test('homeCanvas: empty state shows muted message', () => {
