@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { getChangelogs, getChangelogById, getInProgressPosts } from './featurebase.js';
 import { homeCanvas, detailCanvas, errorCanvas } from './canvas.js';
+import { registerAuthRoutes } from './auth-routes.js';
+import { isMultiTenantEnabled } from './intercom.js';
+import { dbAvailable } from './db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');
@@ -25,8 +28,18 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, mock: config.mock, uptime: process.uptime() });
+  res.json({
+    ok: true,
+    mock: config.mock,
+    uptime: process.uptime(),
+    multi_tenant: isMultiTenantEnabled(),
+    db: dbAvailable(),
+  });
 });
+
+// OAuth install flow for the multi-tenant App Store build. No-op when
+// INTERCOM_CLIENT_ID is unset (single-tenant deploys).
+registerAuthRoutes(app);
 
 app.get('/favicon.svg', (_req, res) =>
   res.sendFile(path.join(assetsDir, 'favicon.svg')),
