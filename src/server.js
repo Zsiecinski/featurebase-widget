@@ -106,8 +106,7 @@ app.get('/', (_req, res) => {
     <p class="muted">Intercom Canvas Kit app surfacing the Featurebase &ldquo;Done&rdquo; roadmap column inside the Messenger.</p>
     <div class="endpoints muted">
       <div><code>POST /initialize</code> &middot; Canvas render</div>
-      <div><code>POST /submit</code> &middot; Canvas re-render on interaction</div>
-      <div><code>POST /sheet/:id</code> &middot; Drill-down detail view</div>
+      <div><code>POST /submit</code> &middot; Re-render on tap (drill-down, back, expand)</div>
       <div><code>GET /health</code> &middot; Uptime check</div>
     </div>
   </main>
@@ -118,51 +117,50 @@ app.get('/', (_req, res) => {
 // ---------------------------------------------------------------------------
 // Canvas Kit endpoints
 // ---------------------------------------------------------------------------
+//
+// One handler serves both /initialize and /submit. Intercom uses component_id
+// to tell us which UI element was tapped:
+//
+//   undefined       /initialize cold open -> homeCanvas
+//   "see_more"      Show N more clicked -> homeCanvas expanded=true
+//   "show_less"     Show less clicked   -> homeCanvas expanded=false
+//   "back_to_home"  Back from detail    -> homeCanvas, preserve expanded
+//   "item_<id>"     List item tapped    -> detailCanvas(entry)
+//
+// State (currently just `expanded`) rides through Canvas Kit's stored_data
+// blob, which Intercom echoes back to us on every submit.
 
-// Derive the public base URL for this server from the incoming request.
-// Used to build absolute sheet URLs in list items. trust proxy is enabled
-// so req.protocol reflects X-Forwarded-Proto.
-function baseUrlFor(req) {
-  return `${req.protocol}://${req.get('host')}`;
-}
-
-// Read whether the user has tapped Show more / Show less. The previous render
-// echoes back the expanded flag via stored_data; button clicks override.
-function readHomeState(req) {
+function readState(req) {
   const stored = req.body?.current_canvas?.stored_data || {};
-  const componentId = req.body?.component_id;
+  const componentId = req.body?.component_id || '';
   let expanded = stored.expanded === 'true';
   if (componentId === 'see_more') expanded = true;
   if (componentId === 'show_less') expanded = false;
-  return { expanded };
+  return { expanded, componentId };
 }
 
-async function renderHome(req, res) {
-  const { expanded } = readHomeState(req);
+async function renderCanvas(req, res) {
+  const { expanded, componentId } = readState(req);
+
   try {
+    // Item tapped — render the detail view of that entry.
+    if (componentId.startsWith('item_')) {
+      const entryId = componentId.slice('item_'.length);
+      const entry = await getChangelogById(entryId);
+      return res.send(detailCanvas(entry, { expanded }));
+    }
+
+    // Otherwise (cold open, see_more/show_less, back_to_home) — home view.
     const entries = await getChangelogs();
-    res.send(homeCanvas(entries, { expanded, baseUrl: baseUrlFor(req) }));
+    res.send(homeCanvas(entries, { expanded }));
   } catch (err) {
-    console.error('[featurebase] failed:', err.message);
+    console.error('[loop] failed:', err.message);
     res.send(errorCanvas());
   }
 }
 
-app.post('/initialize', renderHome);
-app.post('/submit', renderHome);
-
-// Sheet endpoint — drill-down detail for one changelog entry.
-// Intercom POSTs here when an item with action.type='sheet' is tapped.
-app.post('/sheet/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const entry = await getChangelogById(id);
-    res.send(detailCanvas(entry));
-  } catch (err) {
-    console.error(`[featurebase] sheet ${id} failed:`, err.message);
-    res.send(errorCanvas());
-  }
-});
+app.post('/initialize', renderCanvas);
+app.post('/submit', renderCanvas);
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {

@@ -96,12 +96,9 @@ function truncate(text, limit) {
  * @param {Array} entries
  * @param {object} [opts]
  * @param {boolean} [opts.expanded]  - Show all entries vs. top COLLAPSED_COUNT.
- * @param {string}  [opts.baseUrl]   - Public URL of this server, used to build
- *                                     absolute sheet URLs per item.
  */
 export function homeCanvas(entries, opts = {}) {
   const expanded = Boolean(opts.expanded);
-  const baseUrl = opts.baseUrl || '';
   const showCategoryBadge = !config.featurebase.category;
 
   const total = entries.length;
@@ -135,12 +132,11 @@ export function homeCanvas(entries, opts = {}) {
         type: 'item',
         id: `item_${e.id}`,
         title: e.title,
-        // Sheet action opens the detail canvas inside Messenger instead of
-        // kicking the user out to a browser tab.
-        action: {
-          type: 'sheet',
-          url: `${baseUrl}/sheet/${encodeURIComponent(e.id)}`,
-        },
+        // Submit action replaces the current canvas with the detail view.
+        // Intercom POSTs to /submit with component_id="item_<entryId>" — the
+        // server parses the id and returns detailCanvas(entry). Stays in
+        // Messenger, no iframe / no new tab.
+        action: { type: 'submit' },
       };
       if (subtitle) item.subtitle = subtitle;
       if (image) {
@@ -196,13 +192,25 @@ export function homeCanvas(entries, opts = {}) {
 // Detail canvas — the slide-over sheet a user sees when tapping a list item.
 // ---------------------------------------------------------------------------
 /**
- * @param {object|null} entry - The changelog entry to render, or null if it
- *                              couldn't be loaded.
+ * @param {object|null} entry  - The changelog entry to render, or null.
+ * @param {object} [opts]
+ * @param {boolean} [opts.expanded] - Preserved across Back so home returns
+ *                                    to the same state the user came from.
  */
-export function detailCanvas(entry) {
-  if (!entry) return detailNotFoundCanvas();
+export function detailCanvas(entry, opts = {}) {
+  const expanded = Boolean(opts.expanded);
+  if (!entry) return detailNotFoundCanvas({ expanded });
 
-  const components = [];
+  const components = [
+    {
+      type: 'button',
+      id: 'back_to_home',
+      label: '← Back to all',
+      style: 'link',
+      action: { type: 'submit' },
+    },
+    { type: 'spacer', id: 'sp_back', size: 'xs' },
+  ];
 
   const image = extractImage(entry);
   if (image) {
@@ -279,14 +287,27 @@ export function detailCanvas(entry) {
     });
   }
 
-  return { canvas: { content: { components } } };
+  return {
+    canvas: {
+      content: { components },
+      stored_data: { expanded: expanded ? 'true' : 'false' },
+    },
+  };
 }
 
-function detailNotFoundCanvas() {
+function detailNotFoundCanvas({ expanded = false } = {}) {
   return {
     canvas: {
       content: {
         components: [
+          {
+            type: 'button',
+            id: 'back_to_home',
+            label: '← Back to all',
+            style: 'link',
+            action: { type: 'submit' },
+          },
+          { type: 'spacer', id: 'd_nf_sp_top', size: 'xs' },
           { type: 'text', id: 'd_nf_title', text: 'Update unavailable', style: 'header' },
           {
             type: 'text',
@@ -304,6 +325,7 @@ function detailNotFoundCanvas() {
           },
         ],
       },
+      stored_data: { expanded: expanded ? 'true' : 'false' },
     },
   };
 }

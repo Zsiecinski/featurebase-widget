@@ -59,22 +59,16 @@ test('homeCanvas: header + simple subhead (no count, no filter)', () => {
   assert.equal(c.find((x) => x.id === 'time_range'), undefined);
 });
 
-test('homeCanvas: items use sheet action with absolute URL', () => {
-  const out = homeCanvas(sampleEntries, { baseUrl: 'https://loop.example.com' });
+test('homeCanvas: items use submit action with component_id encoding entry id', () => {
+  const out = homeCanvas(sampleEntries);
   const list = comp(out).find((c) => c.type === 'list');
   assert.equal(list.items.length, sampleEntries.length);
   const itemA = list.items.find((i) => i.id === 'item_a');
-  assert.equal(itemA.action.type, 'sheet');
-  assert.equal(itemA.action.url, 'https://loop.example.com/sheet/a');
-});
-
-test('homeCanvas: entry id is URL-encoded in sheet URL', () => {
-  const out = homeCanvas(
-    [{ id: 'has spaces/&', title: 'Weird ID', url: 'https://x.test' }],
-    { baseUrl: 'https://loop.example.com' },
-  );
-  const item = comp(out).find((c) => c.type === 'list').items[0];
-  assert.equal(item.action.url, 'https://loop.example.com/sheet/has%20spaces%2F%26');
+  assert.equal(itemA.action.type, 'submit');
+  // No URL on submit actions — Intercom POSTs to the app's configured
+  // Submit URL with component_id="item_a" so the server can route.
+  assert.equal(itemA.action.url, undefined);
+  assert.equal(itemA.id, 'item_a');
 });
 
 test('homeCanvas: collapsed by default to COLLAPSED_COUNT items', () => {
@@ -134,6 +128,30 @@ test('homeCanvas: empty state shows muted message', () => {
 // Detail canvas
 // ---------------------------------------------------------------------------
 
+test('detailCanvas: includes Back button as the first component', () => {
+  const entry = { id: 'x', title: 't', url: 'https://x.test' };
+  const out = detailCanvas(entry);
+  const back = comp(out)[0];
+  assert.equal(back.id, 'back_to_home');
+  assert.equal(back.type, 'button');
+  assert.equal(back.action.type, 'submit');
+});
+
+test('detailCanvas: preserves expanded flag via stored_data so Back returns to same home state', () => {
+  const entry = { id: 'x', title: 't', url: 'https://x.test' };
+  const expanded = detailCanvas(entry, { expanded: true });
+  const collapsed = detailCanvas(entry, { expanded: false });
+  assert.equal(expanded.canvas.stored_data.expanded, 'true');
+  assert.equal(collapsed.canvas.stored_data.expanded, 'false');
+});
+
+test('detailCanvas: not-found state still has Back button', () => {
+  const out = detailCanvas(null, { expanded: true });
+  const back = comp(out)[0];
+  assert.equal(back.id, 'back_to_home');
+  assert.equal(out.canvas.stored_data.expanded, 'true');
+});
+
 test('detailCanvas: title + meta + body paragraphs + open-on-Featurebase button', () => {
   const entry = {
     id: 'x',
@@ -185,11 +203,12 @@ test('detailCanvas: long body is truncated with "continue reading" hint', () => 
   assert.match(more.text, /Continue reading/);
 });
 
-test('detailCanvas: not-found state when entry is null', () => {
+test('detailCanvas: not-found state shows update-unavailable header', () => {
   const out = detailCanvas(null);
   const c = comp(out);
-  assert.equal(c[0].id, 'd_nf_title');
-  assert.match(c[0].text, /Update unavailable/);
+  const title = c.find((x) => x.id === 'd_nf_title');
+  assert.ok(title);
+  assert.match(title.text, /Update unavailable/);
 });
 
 // ---------------------------------------------------------------------------
