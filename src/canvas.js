@@ -48,10 +48,13 @@ function extractImage(entry) {
 // /assets handler in src/server.js.
 const TYPE_CATEGORIES = new Set(['new', 'improved', 'fixed']);
 const TYPE_BADGE_IMAGE = {
-  NEW: '/assets/badge-new.png',
-  IMPROVED: '/assets/badge-improved.png',
-  FIXED: '/assets/badge-fixed.png',
+  NEW: '/assets/pill-new.png',
+  IMPROVED: '/assets/pill-improved.png',
+  FIXED: '/assets/pill-fixed.png',
 };
+// 3:1 aspect to match the 180x60 pill SVG. Rendered ~60x20 in the avatar slot.
+const BADGE_IMAGE_WIDTH = 60;
+const BADGE_IMAGE_HEIGHT = 20;
 
 function categoryNames(entry) {
   return (entry.categories || []).map((c) =>
@@ -102,15 +105,16 @@ function typeBadgeText(entry) {
   return icon ? `${icon} ${badge}` : badge;
 }
 
-// Badge moves to the title field so it inherits the bold styling of titles
-// and reads like a chip. Subtitle drops to metadata only (date + comments).
+// Title is now plain (no inline emoji) — the visual badge is the item.image
+// thumbnail to the left. If list-item images fail again, we'll revert to
+// prefixing the title with the colored emoji as a fallback.
 function entryTitle(entry) {
-  const badge = typeBadgeText(entry);
-  return badge ? `${badge} · ${entry.title}` : entry.title;
+  return entry.title;
 }
 
 function entrySubtitle(entry, { showBoard } = {}) {
   const parts = [];
+  // Type word is now visually carried by the pill image; drop it from text.
   if (showBoard) {
     const board = boardCategoryName(entry);
     if (board) parts.push(board);
@@ -209,13 +213,16 @@ export function homeCanvas(entries, opts = {}) {
       };
       if (subtitle) item.subtitle = subtitle;
 
-      // Only attach featuredImage. Type badge is now carried inline in the
-      // subtitle (text + emoji). External image URLs were causing Intercom
-      // to reject the entire canvas with a "failed to set up that card"
-      // error — even though the images served correctly. Safer to keep list
-      // items as text-only and use Featurebase's own featuredImage when set.
+      // Pill badge thumbnail in the list item's image slot. image_width /
+      // image_height are required for Canvas Kit to render — without them,
+      // Intercom rejects the canvas with "failed to set up that card."
+      const badgeUrl = typeBadgeImageUrl(e, baseUrl);
       const featured = extractImage(e);
-      if (featured) {
+      if (badgeUrl) {
+        item.image = badgeUrl;
+        item.image_width = BADGE_IMAGE_WIDTH;
+        item.image_height = BADGE_IMAGE_HEIGHT;
+      } else if (featured) {
         item.image = featured;
       }
       return item;

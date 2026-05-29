@@ -130,29 +130,35 @@ test('typeBadge: extracts NEW / IMPROVED / FIXED in upper case', () => {
   assert.equal(typeBadge({}), '');
 });
 
-test('homeCanvas: title now carries the colored badge for bold visual weight', () => {
+test('homeCanvas: title is plain (badge is carried by item.image)', () => {
   const out = homeCanvas(sampleEntries);
   const list = comp(out).find((c) => c.type === 'list');
-  assert.match(list.items.find((i) => i.id === 'item_a').title, /^🟢 NEW · Alpha shipped$/);
-  assert.match(list.items.find((i) => i.id === 'item_b').title, /^🟣 IMPROVED · Beta shipped$/);
-  assert.match(list.items.find((i) => i.id === 'item_c').title, /^🟠 FIXED · Gamma shipped$/);
+  assert.equal(list.items.find((i) => i.id === 'item_a').title, 'Alpha shipped');
+  assert.equal(list.items.find((i) => i.id === 'item_b').title, 'Beta shipped');
+  assert.equal(list.items.find((i) => i.id === 'item_c').title, 'Gamma shipped');
 });
 
-test('homeCanvas: subtitle no longer includes badge (it moved to title)', () => {
+test('homeCanvas: subtitle has no type word (pill carries it visually)', () => {
   const out = homeCanvas(sampleEntries);
   const list = comp(out).find((c) => c.type === 'list');
   const itemA = list.items.find((i) => i.id === 'item_a');
-  assert.doesNotMatch(itemA.subtitle || '', /NEW|IMPROVED|FIXED/);
-  assert.doesNotMatch(itemA.subtitle || '', /🟢|🟣|🟠/);
+  assert.doesNotMatch(itemA.subtitle, /^NEW/);
+  assert.doesNotMatch(itemA.subtitle, /^IMPROVED/);
+  assert.doesNotMatch(itemA.subtitle, /^FIXED/);
+  assert.match(itemA.subtitle, /Shipped/);
 });
 
-test('homeCanvas: item.image only set when entry has featuredImage', () => {
-  const out = homeCanvas(sampleEntries);
+test('homeCanvas: each item gets pill PNG with 60x20 dimensions', () => {
+  const out = homeCanvas(sampleEntries, { baseUrl: 'https://loop.example.com' });
   const list = comp(out).find((c) => c.type === 'list');
-  // sample entry a has featuredImage, b and c do not
-  assert.equal(list.items.find((i) => i.id === 'item_a').image, 'https://example.com/a.png');
-  assert.equal(list.items.find((i) => i.id === 'item_b').image, undefined);
-  assert.equal(list.items.find((i) => i.id === 'item_c').image, undefined);
+  const itemA = list.items.find((i) => i.id === 'item_a');
+  const itemB = list.items.find((i) => i.id === 'item_b');
+  const itemC = list.items.find((i) => i.id === 'item_c');
+  assert.equal(itemA.image, 'https://loop.example.com/assets/pill-new.png');
+  assert.equal(itemB.image, 'https://loop.example.com/assets/pill-improved.png');
+  assert.equal(itemC.image, 'https://loop.example.com/assets/pill-fixed.png');
+  assert.equal(itemA.image_width, 60);
+  assert.equal(itemA.image_height, 20);
 });
 
 test('detailCanvas: meta line includes plain type word', () => {
