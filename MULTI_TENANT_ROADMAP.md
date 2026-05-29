@@ -30,47 +30,50 @@ deploys (those skip the new code via env-var gating).
 **Single-tenant production is unaffected.** Without `DATABASE_URL` +
 `INTERCOM_CLIENT_*` set, all new code paths short-circuit.
 
-## Phase 2 — Per-tenant Featurebase calls
+## Phase 2 — Per-tenant Featurebase calls ✅
 
-This is the meaningful refactor. Currently `featurebase.js` reads
-`config.featurebase.apiKey` from env. Multi-tenant mode needs each
-Canvas Kit request to look up the calling workspace's stored credentials.
-
-- [ ] In `server.js` `renderCanvas`, look up the tenant by
+- [x] In `server.js` `renderCanvas`, look up the tenant by
   `req.body.workspace_id`. If found and configured → use their FB key.
   If not configured → render a "needs setup" canvas. If env-var mode →
   fall back to current behavior.
-- [ ] Refactor `getChangelogs`, `getInProgressPosts`, `getChangelogById`
-  to accept credentials as a parameter rather than reading from `config`.
-  Existing call sites pass the env-var fallback.
-- [ ] Add Featurebase API key entry to the `/configure` flow. Validate
-  the key by making a real `/v2/post_statuses` call before saving.
-- [ ] Add a "needs setup" canvas state for tenants that haven't completed
-  Featurebase configuration yet — friendly prompt with a CTA to the
-  Configure form.
+- [x] Refactor `getChangelogs`, `getInProgressPosts`, `getChangelogById`
+  to accept credentials as a parameter. `credsOrDefault()` falls back
+  to env vars when called with `null` so single-tenant call sites work.
+- [x] Add Featurebase API key entry to the `/configure` flow.
+  `validateCredentials()` makes a real `/v2/post_statuses` call before
+  saving — bad keys are rejected with an inline error.
+- [x] `needsSetupCanvas` for tenants without Featurebase config yet.
+- [x] Status-ID cache keyed by `${baseUrl}|${type}` so tenants don't
+  share each other's resolved status IDs.
 
-## Phase 3 — Webhook signature enforcement
+## Phase 3 — Webhook signature enforcement ✅
 
-- [ ] Add raw-body capture (Express's `express.json({ verify })` callback)
-  so signature middleware can recompute HMAC over the unparsed bytes.
-- [ ] Apply `verifyCanvasKitSignature` to `/initialize`, `/submit`,
-  `/configure` (skip `/auth/*` — Intercom's OAuth flow uses different auth).
-- [ ] In dev, allow bypass when `INTERCOM_CLIENT_SECRET` is unset.
+- [x] Raw-body capture via `express.json({ verify })` callback so
+  signature middleware can recompute HMAC over the unparsed bytes.
+- [x] `verifyCanvasKitSignature` applied to `/initialize`, `/submit`,
+  `/configure`. Other routes (`/health`, `/assets/*`, `/auth/*`,
+  `/debug/*`) skip it intentionally.
+- [x] Middleware short-circuits to `next()` when `INTERCOM_CLIENT_SECRET`
+  is unset (single-tenant unaffected).
+- [x] Verified: secret set + missing X-Body-Signature → 401.
 
-## Phase 4 — App Store listing prep
+## Phase 4 — App Store listing prep ⚠️ (drafted, awaiting your input)
 
-Branding + docs, not code:
+Templates drafted in this repo. User decisions needed to finalize:
 
-- [ ] Privacy policy hosted at a public URL (use Termly or Iubenda template)
-- [ ] Terms of service hosted at a public URL
-- [ ] Data handling disclosure (GDPR section): what we store, retention,
-  deletion process
-- [ ] Support email (`support@loop.example` or similar)
-- [ ] Marketing screenshots: home view, configure form, detail sheet,
-  empty/setup state. Take in actual Messenger (use Staytuned for fixtures).
-- [ ] App Store listing copy: name, tagline, 500-word description,
-  category selection
-- [ ] Pricing decision: free / one-time / subscription / BYO Stripe
+- [x] App Store listing copy → `APP_STORE_LISTING.md`
+  (name, tagline, descriptions, screenshots brief, scopes,
+  submission checklist)
+- [x] Privacy policy template → `PRIVACY_POLICY.md`
+- [x] Terms of service template → `TERMS.md`
+- [ ] Fill in placeholders (company name, jurisdiction, contact email)
+  in both templates
+- [ ] Host the privacy + terms at public URLs
+- [ ] Set up a support email forwarder (`support@yourdomain`)
+- [ ] Take the 5 marketing screenshots in production Messenger
+  (use Staytuned for fixtures — see APP_STORE_LISTING.md for the brief)
+- [ ] Pricing decision (recommended: Free for v1)
+- [ ] Domain decision (`loop.app`, `loop-app.io`, subdomain of yours…)
 
 ## Phase 5 — Submission + review
 
