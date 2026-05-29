@@ -131,16 +131,18 @@ function entrySubtitle(entry, { showBoard } = {}) {
 
 // ---------------------------------------------------------------------------
 // Markdown → plain-text. Canvas Kit text components don't render markdown,
-// so we strip syntax and rely on paragraph breaks for visual structure.
+// so we strip inline syntax (bold, italic, links, code) and rely on
+// paragraph breaks for visual structure. Headers are preserved through this
+// pass so the renderer can detect them and assign a distinct text style.
 // ---------------------------------------------------------------------------
-function stripMarkdown(md) {
+function stripMarkdownInline(md) {
   if (!md) return '';
   return md
     .replace(/```[\s\S]*?```/g, '')        // fenced code blocks
     .replace(/`([^`]+)`/g, '$1')           // inline code
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')  // images
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → just text
-    .replace(/^#{1,6}\s+/gm, '')           // headings
+    // NOTE: leave heading markers (#) intact — detected per-block below.
     .replace(/^\s*>\s?/gm, '')             // blockquotes
     .replace(/(\*\*|__)(.+?)\1/g, '$2')    // bold
     .replace(/(\*|_)(.+?)\1/g, '$2')       // italic
@@ -149,6 +151,18 @@ function stripMarkdown(md) {
     .replace(/<[^>]+>/g, '')               // strip any HTML tags
     .replace(/\n{3,}/g, '\n\n')            // collapse runs of blank lines
     .trim();
+}
+
+// Split content into blocks (paragraph-separated chunks) and classify each as
+// a header or a paragraph based on leading markdown # markers.
+function parseBodyBlocks(text) {
+  const chunks = text.split(/\n{2,}/).filter(Boolean);
+  return chunks.map((raw) => {
+    const m = raw.match(/^(#{1,6})\s+(.+)$/);
+    if (m) return { type: 'header', text: m[2].trim() };
+    // Strip any stray # markers from mid-paragraph (rare).
+    return { type: 'paragraph', text: raw.replace(/^#{1,6}\s+/gm, '') };
+  });
 }
 
 function truncate(text, limit) {
@@ -360,19 +374,36 @@ export function detailCanvas(entry, opts = {}) {
   );
 
   // Body content — prefer markdownContent, fall back to content (stripped of
-  // HTML), split into paragraphs, cap total length to avoid a wall of text.
+  // HTML), parse into typed blocks (headers vs paragraphs), cap total length
+  // to avoid a wall of text.
   const raw = entry.markdownContent || entry.content || '';
-  const stripped = stripMarkdown(raw);
+  const stripped = stripMarkdownInline(raw);
   const { text, truncated } = truncate(stripped, DETAIL_BODY_CHAR_LIMIT);
   if (text) {
-    const paragraphs = text.split(/\n{2,}/).filter(Boolean);
-    paragraphs.forEach((p, i) => {
-      components.push({
-        type: 'text',
-        id: `d_body_${i}`,
-        text: p,
-        style: 'paragraph',
-      });
+    const blocks = parseBodyBlocks(text);
+    blocks.forEach((b, i) => {
+      if (b.type === 'header') {
+        // Section header rendered in Canvas Kit's 'header' style — bold,
+        // prominent. Preserves the case the publisher wrote in their
+        // markdown so '## What changed' renders as "What changed", not
+        // SHOUTING. Spacer above for visual separation between sections.
+        if (i > 0) {
+          components.push({ type: 'spacer', id: `sp_h${i}`, size: 's' });
+        }
+        components.push({
+          type: 'text',
+          id: `d_body_${i}`,
+          text: b.text,
+          style: 'header',
+        });
+      } else {
+        components.push({
+          type: 'text',
+          id: `d_body_${i}`,
+          text: b.text,
+          style: 'paragraph',
+        });
+      }
     });
     if (truncated) {
       components.push({ type: 'spacer', id: 'sp_more', size: 'xs' });
