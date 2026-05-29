@@ -386,10 +386,35 @@ function configSavedResponse(saved) {
 }
 
 app.post('/configure', (req, res) => {
-  // Diagnostic: log what Intercom sends to /configure so we can verify the
-  // teammate-saved options come back to us correctly on a re-open.
-  console.log('[loop] /configure request body keys:', Object.keys(req.body || {}));
   res.set('Cache-Control', 'no-store');
+
+  const componentId = req.body?.component_id || '';
+  console.log('[loop] /configure call. component_id:', componentId || '(initial load)');
+
+  // SAVE PATH: clicking Save settings inside the configure form loops back
+  // to /configure (not /submit, as some Canvas Kit versions do). Detect by
+  // the component_id of our Save button and persist the options here,
+  // returning NO canvas so the modal closes.
+  if (componentId === 'save_config') {
+    console.log('[loop] /configure save_config body:', JSON.stringify(req.body, null, 2));
+    const v = req.body?.input_values || {};
+    const saved = {
+      show_pills: v.show_pills === 'false' ? 'false' : 'true',
+      show_coming_next: v.show_coming_next === 'true' ? 'true' : 'false',
+      show_full_roadmap: v.show_full_roadmap === 'false' ? 'false' : 'true',
+      show_comments: v.show_comments === 'false' ? 'false' : 'true',
+      collapsed_count: ['3', '5', '8'].includes(v.collapsed_count) ? v.collapsed_count : '3',
+      coming_next_count: ['2', '3', '5'].includes(v.coming_next_count) ? v.coming_next_count : '3',
+      header_text: (v.header_text || '').trim(),
+      coming_header_text: (v.coming_header_text || '').trim(),
+      footer_label: (v.footer_label || '').trim(),
+      footer_url: (v.footer_url || '').trim(),
+    };
+    return res.send(configSavedResponse(saved));
+  }
+
+  // INITIAL LOAD: teammate opened the configure modal — return the form,
+  // pre-filled with whatever's currently saved.
   res.send(configureCanvas(readConfig(req)));
 });
 
