@@ -162,6 +162,24 @@ async function renderCanvas(req, res) {
 app.post('/initialize', renderCanvas);
 app.post('/submit', renderCanvas);
 
+// Backward-compat fallback. An earlier Loop version used sheet actions
+// pointing at /sheet/:id. Intercom's Messenger caches canvases per session,
+// so users with a stale Home card may still POST here. Redirect them to the
+// Featurebase entry page — the sheet iframe will render it cleanly.
+// Once their Messenger session refreshes and they re-fetch /initialize, item
+// actions become submit-based and this route stops being hit.
+app.post('/sheet/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const entry = await getChangelogById(id);
+    if (entry?.url) return res.redirect(302, entry.url);
+    return res.redirect(302, config.roadmapUrl);
+  } catch (err) {
+    console.error(`[loop] legacy sheet ${id} failed:`, err.message);
+    res.redirect(302, config.roadmapUrl);
+  }
+});
+
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {
     const mode = config.mock ? ' (MOCK mode — no API key set)' : '';
