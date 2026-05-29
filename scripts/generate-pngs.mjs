@@ -33,6 +33,20 @@ const renders = [
   { svg: badgeNewSvg, size: 96, name: 'badge-new.png' },
   { svg: badgeImprovedSvg, size: 96, name: 'badge-improved.png' },
   { svg: badgeFixedSvg, size: 96, name: 'badge-fixed.png' },
+  // Pill-shaped wide variants (with the full word) for use as list-item images
+  // when 3:1 aspect ratio is desired. 360x120 = 6x retina density.
+  {
+    svg: await readFile(join(assets, 'pill-new.svg')),
+    width: 360, height: 120, name: 'pill-new.png',
+  },
+  {
+    svg: await readFile(join(assets, 'pill-improved.svg')),
+    width: 360, height: 120, name: 'pill-improved.png',
+  },
+  {
+    svg: await readFile(join(assets, 'pill-fixed.svg')),
+    width: 360, height: 120, name: 'pill-fixed.png',
+  },
 ];
 
 for (const r of renders) {
