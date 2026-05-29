@@ -53,14 +53,16 @@ test('getChangelogById: returns the single matching entry', async () => {
     return jsonResponse({ data: [{ id: 'mock_c1', title: 'Found it' }] });
   });
 
-  const entry = await getChangelogById('mock_c1');
+  // First arg is `credentials` (null = use env-var fallback). Tests
+  // pre-set FEATUREBASE_API_KEY so the fallback gives valid creds.
+  const entry = await getChangelogById(null, 'mock_c1');
   assert.equal(entry.id, 'mock_c1');
   assert.equal(entry.title, 'Found it');
 });
 
 test('getChangelogById: returns null when API returns empty data', async () => {
   stubFetch(async () => jsonResponse({ data: [] }));
-  const entry = await getChangelogById('missing');
+  const entry = await getChangelogById(null, 'missing');
   assert.equal(entry, null);
 });
 
@@ -70,7 +72,7 @@ test('getChangelogById: returns null for empty id without hitting the API', asyn
     called = true;
     return jsonResponse({ data: [] });
   });
-  const entry = await getChangelogById('');
+  const entry = await getChangelogById(null, '');
   assert.equal(entry, null);
   assert.equal(called, false);
 });

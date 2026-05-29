@@ -542,6 +542,35 @@ function detailNotFoundCanvas({ expanded = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Needs-setup canvas — rendered for multi-tenant tenants who haven't yet
+// connected their Featurebase API key via the Configure flow.
+// ---------------------------------------------------------------------------
+export function needsSetupCanvas({ reason = 'not_configured' } = {}) {
+  const body =
+    reason === 'not_installed'
+      ? "We couldn't find a Loop install for this Intercom workspace. Reinstall the app from the Intercom App Store to connect."
+      : 'Loop needs a Featurebase API key before it can show your roadmap. Ask an admin to open Loop settings (the gear icon on this card in Messenger settings) and paste your Featurebase API key.';
+
+  return {
+    canvas: {
+      content: {
+        components: [
+          { type: 'text', id: 'setup_title', text: 'Loop needs setup', style: 'header' },
+          { type: 'text', id: 'setup_body', text: body, style: 'paragraph' },
+          { type: 'spacer', id: 'setup_sp', size: 's' },
+          {
+            type: 'text',
+            id: 'setup_hint',
+            text: "Once configured, this card will show recently shipped features from your Featurebase roadmap.",
+            style: 'muted',
+          },
+        ],
+      },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Generic error canvas (network / API failures).
 // ---------------------------------------------------------------------------
 export function errorCanvas() {

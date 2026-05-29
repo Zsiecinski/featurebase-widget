@@ -2,11 +2,20 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import { getChangelogs, getChangelogById, getInProgressPosts } from './featurebase.js';
-import { homeCanvas, detailCanvas, errorCanvas } from './canvas.js';
+import {
+  getChangelogs,
+  getChangelogById,
+  getInProgressPosts,
+  validateCredentials,
+} from './featurebase.js';
+import { homeCanvas, detailCanvas, errorCanvas, needsSetupCanvas } from './canvas.js';
 import { registerAuthRoutes } from './auth-routes.js';
 import { isMultiTenantEnabled } from './intercom.js';
-import { dbAvailable } from './db/index.js';
+import {
+  dbAvailable,
+  findTenantByWorkspace,
+  saveFeaturebaseConfig,
+} from './db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');
@@ -185,6 +194,37 @@ function baseUrlFor(req) {
   return `${req.protocol}://${req.get('host')}`;
 }
 
+// Resolve which Featurebase credentials this Canvas Kit request should use.
+//
+//   1. Multi-tenant mode (DB available + workspace_id in request):
+//      Look up the tenant; if configured, return their credentials.
+//      If found but not configured, return { needsSetup: true }.
+//   2. Single-tenant mode: return null (featurebase.js will fall back to
+//      env-var config).
+async function resolveCredentials(req) {
+  if (!dbAvailable()) return { credentials: null };
+
+  const workspaceId =
+    req.body?.workspace_id ||
+    req.body?.context?.workspace_id ||
+    req.body?.contact?.app_id;
+
+  if (!workspaceId) return { credentials: null };
+
+  const tenant = await findTenantByWorkspace(workspaceId);
+  if (!tenant) {
+    // Workspace ID present but no tenant row — install OAuth hasn't run yet.
+    return { needsSetup: true, reason: 'not_installed' };
+  }
+  if (!tenant.featurebase.apiKey) {
+    return { needsSetup: true, reason: 'not_configured', workspaceId };
+  }
+  return {
+    credentials: tenant.featurebase,
+    workspaceId,
+  };
+}
+
 async function renderCanvas(req, res) {
   const { expanded, componentId } = readState(req);
   const config = readConfig(req);
@@ -223,11 +263,21 @@ async function renderCanvas(req, res) {
     return res.send(configSavedResponse(saved));
   }
 
+  // Resolve which tenant's Featurebase credentials to use (multi-tenant) or
+  // fall back to env-var config (single-tenant). In multi-tenant mode, an
+  // unconfigured tenant shows a friendly "needs setup" canvas instead of an
+  // error — the configure form is where they fix it.
+  const resolved = await resolveCredentials(req);
+  if (resolved.needsSetup) {
+    return res.send(needsSetupCanvas({ reason: resolved.reason, baseUrl }));
+  }
+  const credentials = resolved.credentials;
+
   try {
     // Item tapped — render the detail view of that entry.
     if (componentId.startsWith('item_')) {
       const entryId = componentId.slice('item_'.length);
-      const entry = await getChangelogById(entryId);
+      const entry = await getChangelogById(credentials, entryId);
       return res.send(detailCanvas(entry, { expanded, baseUrl }));
     }
 
@@ -235,9 +285,9 @@ async function renderCanvas(req, res) {
     // Fetch in-progress posts in parallel only if Coming Next is enabled;
     // otherwise skip the extra Featurebase round-trip.
     const [entries, inProgress] = await Promise.all([
-      getChangelogs(),
+      getChangelogs(credentials),
       config.showComingNext
-        ? getInProgressPosts({ limit: config.comingNextCount })
+        ? getInProgressPosts(credentials, { limit: config.comingNextCount })
         : Promise.resolve([]),
     ]);
     res.send(
@@ -281,106 +331,138 @@ function toggle(id, label, value, yesText = 'Yes', noText = 'No') {
   };
 }
 
-function configureCanvas(current) {
-  return {
-    canvas: {
-      content: {
-        components: [
-          { type: 'text', id: 'cfg_title', text: 'Loop settings', style: 'header' },
-          {
-            type: 'text',
-            id: 'cfg_sub',
-            text: 'Customize how Loop appears to your users. Leave any field blank to use the default.',
-            style: 'muted',
-          },
-          { type: 'spacer', id: 'cfg_sp1', size: 's' },
-          { type: 'divider', id: 'cfg_div1' },
-          { type: 'spacer', id: 'cfg_sp1b', size: 'xs' },
-
-          // ─── Sections ───
-          { type: 'text', id: 'cfg_h_sec', text: 'Sections', style: 'header' },
-          toggle('show_pills', 'Show colored pill badges', current.showPills),
-          toggle('show_coming_next', "Show 'Coming next' section", current.showComingNext,
-            'Yes — show in-progress roadmap items', 'No — only show recently shipped'),
-          toggle('show_full_roadmap', "Show 'See full roadmap' button", current.showFullRoadmap),
-          toggle('show_comments', 'Show comment counts on items', current.showComments),
-
-          { type: 'spacer', id: 'cfg_sp_counts', size: 's' },
-          { type: 'divider', id: 'cfg_div_counts' },
-          { type: 'spacer', id: 'cfg_sp_counts2', size: 'xs' },
-
-          // ─── Counts ───
-          { type: 'text', id: 'cfg_h_counts', text: 'Counts', style: 'header' },
-          {
-            type: 'single-select',
-            id: 'collapsed_count',
-            label: "Items shown before 'Show more'",
-            value: String(current.collapsedCount || 3),
-            options: [
-              { type: 'option', id: '3', text: '3 items' },
-              { type: 'option', id: '5', text: '5 items' },
-              { type: 'option', id: '8', text: '8 items' },
-            ],
-          },
-          {
-            type: 'single-select',
-            id: 'coming_next_count',
-            label: "Items in 'Coming next' section",
-            value: String(current.comingNextCount || 3),
-            options: [
-              { type: 'option', id: '2', text: '2 items' },
-              { type: 'option', id: '3', text: '3 items' },
-              { type: 'option', id: '5', text: '5 items' },
-            ],
-          },
-
-          { type: 'spacer', id: 'cfg_sp2', size: 's' },
-          { type: 'divider', id: 'cfg_div2' },
-          { type: 'spacer', id: 'cfg_sp2b', size: 'xs' },
-
-          // ─── Text overrides ───
-          { type: 'text', id: 'cfg_h_text', text: 'Text', style: 'header' },
-          {
-            type: 'input',
-            id: 'header_text',
-            label: 'Main header (default: Recently shipped)',
-            placeholder: 'Recently shipped',
-            value: current.headerText,
-          },
-          {
-            type: 'input',
-            id: 'coming_header_text',
-            label: "'Coming next' section title (default: Coming next)",
-            placeholder: 'Coming next',
-            value: current.comingHeaderText,
-          },
-          {
-            type: 'input',
-            id: 'footer_label',
-            label: 'Footer button label (default: See full roadmap)',
-            placeholder: 'See full roadmap',
-            value: current.footerLabel,
-          },
-          {
-            type: 'input',
-            id: 'footer_url',
-            label: 'Footer button URL (default: your roadmap URL)',
-            placeholder: 'https://...',
-            value: current.footerUrl,
-          },
-
-          { type: 'spacer', id: 'cfg_sp3', size: 's' },
-          {
-            type: 'button',
-            id: 'save_config',
-            label: 'Save settings',
-            style: 'primary',
-            action: { type: 'submit' },
-          },
-        ],
-      },
+function configureCanvas(current, { multiTenant = false, tenantFb = null } = {}) {
+  const components = [
+    { type: 'text', id: 'cfg_title', text: 'Loop settings', style: 'header' },
+    {
+      type: 'text',
+      id: 'cfg_sub',
+      text: 'Customize how Loop appears to your users. Leave any field blank to use the default.',
+      style: 'muted',
     },
-  };
+  ];
+
+  // ─── Featurebase connection (multi-tenant only) ───
+  if (multiTenant) {
+    components.push(
+      { type: 'spacer', id: 'cfg_fb_sp1', size: 's' },
+      { type: 'divider', id: 'cfg_fb_div' },
+      { type: 'spacer', id: 'cfg_fb_sp2', size: 'xs' },
+      { type: 'text', id: 'cfg_h_fb', text: 'Featurebase connection', style: 'header' },
+      {
+        type: 'text',
+        id: 'cfg_fb_help',
+        text: 'Loop needs your Featurebase API key to pull roadmap and changelog data. Get yours at Featurebase → Settings → API.',
+        style: 'muted',
+      },
+      {
+        type: 'input',
+        id: 'fb_api_key',
+        label: tenantFb?.apiKey ? 'Featurebase API key (saved — paste a new one to replace)' : 'Featurebase API key',
+        placeholder: 'fb_live_…',
+        value: '',
+      },
+      {
+        type: 'input',
+        id: 'fb_category',
+        label: 'Filter to category (optional, e.g. "Kiwi")',
+        placeholder: 'leave blank to show all',
+        value: tenantFb?.category || '',
+      },
+    );
+  }
+
+  // ─── Sections ───
+  components.push(
+    { type: 'spacer', id: 'cfg_sp1', size: 's' },
+    { type: 'divider', id: 'cfg_div1' },
+    { type: 'spacer', id: 'cfg_sp1b', size: 'xs' },
+    { type: 'text', id: 'cfg_h_sec', text: 'Sections', style: 'header' },
+    toggle('show_pills', 'Show colored pill badges', current.showPills),
+    toggle('show_coming_next', "Show 'Coming next' section", current.showComingNext,
+      'Yes — show in-progress roadmap items', 'No — only show recently shipped'),
+    toggle('show_full_roadmap', "Show 'See full roadmap' button", current.showFullRoadmap),
+    toggle('show_comments', 'Show comment counts on items', current.showComments),
+  );
+
+  // ─── Counts ───
+  components.push(
+    { type: 'spacer', id: 'cfg_sp_counts', size: 's' },
+    { type: 'divider', id: 'cfg_div_counts' },
+    { type: 'spacer', id: 'cfg_sp_counts2', size: 'xs' },
+    { type: 'text', id: 'cfg_h_counts', text: 'Counts', style: 'header' },
+    {
+      type: 'single-select',
+      id: 'collapsed_count',
+      label: "Items shown before 'Show more'",
+      value: String(current.collapsedCount || 3),
+      options: [
+        { type: 'option', id: '3', text: '3 items' },
+        { type: 'option', id: '5', text: '5 items' },
+        { type: 'option', id: '8', text: '8 items' },
+      ],
+    },
+    {
+      type: 'single-select',
+      id: 'coming_next_count',
+      label: "Items in 'Coming next' section",
+      value: String(current.comingNextCount || 3),
+      options: [
+        { type: 'option', id: '2', text: '2 items' },
+        { type: 'option', id: '3', text: '3 items' },
+        { type: 'option', id: '5', text: '5 items' },
+      ],
+    },
+  );
+
+  // ─── Text overrides ───
+  components.push(
+    { type: 'spacer', id: 'cfg_sp2', size: 's' },
+    { type: 'divider', id: 'cfg_div2' },
+    { type: 'spacer', id: 'cfg_sp2b', size: 'xs' },
+    { type: 'text', id: 'cfg_h_text', text: 'Text', style: 'header' },
+    {
+      type: 'input',
+      id: 'header_text',
+      label: 'Main header (default: Recently shipped)',
+      placeholder: 'Recently shipped',
+      value: current.headerText,
+    },
+    {
+      type: 'input',
+      id: 'coming_header_text',
+      label: "'Coming next' section title (default: Coming next)",
+      placeholder: 'Coming next',
+      value: current.comingHeaderText,
+    },
+    {
+      type: 'input',
+      id: 'footer_label',
+      label: 'Footer button label (default: See full roadmap)',
+      placeholder: 'See full roadmap',
+      value: current.footerLabel,
+    },
+    {
+      type: 'input',
+      id: 'footer_url',
+      label: 'Footer button URL (default: your roadmap URL)',
+      placeholder: 'https://...',
+      value: current.footerUrl,
+    },
+  );
+
+  components.push(
+    { type: 'spacer', id: 'cfg_sp3', size: 's' },
+    {
+      type: 'button',
+      id: 'save_config',
+      label: 'Save settings',
+      style: 'primary',
+      action: { type: 'submit' },
+    },
+  );
+
+  return { canvas: { content: { components } } };
 }
 
 function configSavedResponse(saved) {
@@ -398,7 +480,7 @@ function configSavedResponse(saved) {
   };
 }
 
-app.post('/configure', (req, res) => {
+app.post('/configure', async (req, res) => {
   res.set('Cache-Control', 'no-store');
 
   const componentId = req.body?.component_id || '';
@@ -409,7 +491,7 @@ app.post('/configure', (req, res) => {
   // the component_id of our Save button and persist the options here,
   // returning NO canvas so the modal closes.
   if (componentId === 'save_config') {
-    console.log('[loop] /configure save_config body:', JSON.stringify(req.body, null, 2));
+    console.log('[loop] /configure save_config body keys:', Object.keys(req.body || {}));
     const v = req.body?.input_values || {};
     const saved = {
       show_pills: v.show_pills === 'false' ? 'false' : 'true',
@@ -423,12 +505,56 @@ app.post('/configure', (req, res) => {
       footer_label: (v.footer_label || '').trim(),
       footer_url: (v.footer_url || '').trim(),
     };
+
+    // Multi-tenant: persist Featurebase credentials to the DB if the
+    // configure form included them. The API key is validated by making
+    // a real Featurebase call before saving — bad keys are rejected.
+    if (dbAvailable() && isMultiTenantEnabled()) {
+      const workspaceId =
+        req.body?.workspace_id ||
+        req.body?.context?.workspace_id;
+      const newKey = (v.fb_api_key || '').trim();
+      const newCategory = (v.fb_category || '').trim();
+
+      if (workspaceId && newKey) {
+        const check = await validateCredentials({ apiKey: newKey });
+        if (!check.ok) {
+          // Re-render the form with an error message so the teammate can fix it.
+          return res.send(
+            configureCanvas(
+              { ...readConfig(req), fbError: check.error },
+              { multiTenant: true, tenantFb: { category: newCategory } },
+            ),
+          );
+        }
+        await saveFeaturebaseConfig({
+          workspaceId,
+          apiKey: newKey,
+          category: newCategory,
+        });
+      } else if (workspaceId && newCategory) {
+        // Category-only update (key already saved previously).
+        await saveFeaturebaseConfig({ workspaceId, category: newCategory });
+      }
+    }
+
     return res.send(configSavedResponse(saved));
   }
 
   // INITIAL LOAD: teammate opened the configure modal — return the form,
   // pre-filled with whatever's currently saved.
-  res.send(configureCanvas(readConfig(req)));
+  const opts = { multiTenant: false, tenantFb: null };
+  if (dbAvailable() && isMultiTenantEnabled()) {
+    const workspaceId =
+      req.body?.workspace_id ||
+      req.body?.context?.workspace_id;
+    if (workspaceId) {
+      const tenant = await findTenantByWorkspace(workspaceId);
+      opts.multiTenant = true;
+      opts.tenantFb = tenant?.featurebase || null;
+    }
+  }
+  res.send(configureCanvas(readConfig(req), opts));
 });
 
 app.post('/initialize', renderCanvas);

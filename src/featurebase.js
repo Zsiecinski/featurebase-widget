@@ -1,6 +1,43 @@
 import { config } from './config.js';
 import { mockChangelogs } from './mock.js';
 
+// ---------------------------------------------------------------------------
+// Credentials handling
+// ---------------------------------------------------------------------------
+// Multi-tenant Loop passes per-tenant credentials on every call. Single-tenant
+// callers can omit them — credsOrDefault() falls back to the env-var config
+// so existing Staytuned behavior keeps working unchanged.
+//
+// Credentials shape:
+//   { apiKey, baseUrl, version, timeoutMs, retries, category, maxItems }
+function credsOrDefault(c) {
+  if (!c || !c.apiKey) {
+    return {
+      apiKey: config.featurebase.apiKey,
+      baseUrl: config.featurebase.baseUrl,
+      version: config.featurebase.version,
+      timeoutMs: config.featurebase.timeoutMs,
+      retries: config.featurebase.retries,
+      category: config.featurebase.category,
+      maxItems: config.maxItems,
+      mock: config.mock,
+    };
+  }
+  return {
+    apiKey: c.apiKey,
+    baseUrl: c.baseUrl || config.featurebase.baseUrl,
+    version: c.version || config.featurebase.version,
+    timeoutMs: c.timeoutMs || config.featurebase.timeoutMs,
+    retries: c.retries ?? config.featurebase.retries,
+    category: c.category || '',
+    maxItems: c.maxItems || config.maxItems,
+    mock: false,  // Real credentials means real API. No mock fallthrough.
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Low-level HTTP
+// ---------------------------------------------------------------------------
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -11,21 +48,17 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   }
 }
 
-async function fb(path, { retries = 0 } = {}) {
-  const url = `${config.featurebase.baseUrl}${path}`;
+async function fb(creds, path, { retries = 0 } = {}) {
+  const url = `${creds.baseUrl}${path}`;
   const headers = {
-    Authorization: `Bearer ${config.featurebase.apiKey}`,
-    'Featurebase-Version': config.featurebase.version,
+    Authorization: `Bearer ${creds.apiKey}`,
+    'Featurebase-Version': creds.version,
   };
 
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetchWithTimeout(
-        url,
-        { headers },
-        config.featurebase.timeoutMs,
-      );
+      const res = await fetchWithTimeout(url, { headers }, creds.timeoutMs);
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Featurebase ${res.status}: ${text}`);
@@ -41,19 +74,9 @@ async function fb(path, { retries = 0 } = {}) {
   throw lastErr;
 }
 
-/**
- * Fetches recent published changelog entries from Featurebase.
- *
- * /v2/changelogs is purpose-built for the "what we shipped, customer-facing"
- * use case — entries are curated, dated, and visible on the org's public
- * changelog page. Avoids the noise of /v2/posts + status=completed, which
- * leaks every internally-closed feedback item across every board.
- *
- * Category filtering is done client-side via case-insensitive substring
- * match. That way FEATUREBASE_CATEGORY="Kiwi" matches a category literally
- * named "Kiwi Size Chart & Recommender" without the user having to know
- * the exact string. We fetch a wider batch from the API and slice locally.
- */
+// ---------------------------------------------------------------------------
+// Visibility + filtering helpers
+// ---------------------------------------------------------------------------
 const CLIENT_FILTER_FETCH_LIMIT = 50;
 
 function matchesCategory(entry, needle) {
@@ -61,19 +84,15 @@ function matchesCategory(entry, needle) {
   const n = needle.toLowerCase();
   const categories = entry.categories || [];
   return categories.some((c) => {
-    // Featurebase docs don't specify whether `categories` is an array of
-    // strings or objects. Handle both.
     const name = typeof c === 'string' ? c : c?.name || '';
     return name.toLowerCase().includes(n);
   });
 }
 
-// Respect Featurebase's "hide from board/widgets" flag — that's the publisher
-// explicitly opting an entry out of public surfaces. Segment restrictions
-// (allowedSegmentIds) are NOT enforced: Loop's stance is "show what was
-// shipped, let viewers self-select." Segment targeting is a publisher-side
-// concern; from a customer-support widget perspective, knowing "we shipped a
-// fix" matters more than gating it by an opaque segment we can't map.
+// Respect Featurebase's "hide from board/widgets" flag — explicit publisher
+// opt-out from public surfaces. Segment restrictions (allowedSegmentIds) are
+// NOT enforced: Loop's stance is "show what was shipped, let viewers self-
+// select."
 function isPubliclyVisible(entry) {
   const localeKey = entry.locale || 'en';
   const note = entry.notifications?.[localeKey] || {};
@@ -81,47 +100,66 @@ function isPubliclyVisible(entry) {
   return true;
 }
 
-/**
- * @param {object} [opts]
- * @param {number|null} [opts.daysBack] - If set, restrict to entries shipped
- *   within the last N days. null/0 = all time.
- */
-/**
- * Look up a single changelog entry by id (or slug, per Featurebase docs).
- * Returns null if not found.
- */
-// Cache status IDs by their workflow type ('reviewing', 'active', 'completed',
-// etc.). Featurebase posts are filtered by statusId (a 24-char hex), but we
-// know which type we care about, so we look up the id once and cache.
-const statusIdByType = new Map();
+// ---------------------------------------------------------------------------
+// Status ID cache — keyed by org base URL so different tenants don't clobber
+// each other. Status IDs are stable for a given Featurebase org.
+// ---------------------------------------------------------------------------
+const statusIdCache = new Map(); // key: `${baseUrl}|${type}`
 
-async function getStatusIdByType(type) {
-  if (statusIdByType.has(type)) return statusIdByType.get(type);
-  const data = await fb('/v2/post_statuses', {
-    retries: config.featurebase.retries,
-  });
+async function getStatusIdByType(creds, type) {
+  const key = `${creds.baseUrl}|${type}`;
+  if (statusIdCache.has(key)) return statusIdCache.get(key);
+  const data = await fb(creds, '/v2/post_statuses', { retries: creds.retries });
   const list = Array.isArray(data) ? data : data.data || [];
   const match = list.find((s) => s.type === type);
   if (!match) return null;
-  statusIdByType.set(type, match.id);
+  statusIdCache.set(key, match.id);
   return match.id;
 }
 
+// ---------------------------------------------------------------------------
+// Public API — all take an optional `credentials` arg for multi-tenant mode.
+// ---------------------------------------------------------------------------
+
 /**
- * Fetches active "in progress" posts from the Featurebase roadmap. Used by
- * the home canvas's optional "Coming next" section to give users a forward-
- * looking glimpse of what's being built.
+ * Validate a Featurebase API key by making the cheapest possible authenticated
+ * call (lists statuses). Returns { ok, status, error? } so the Configure
+ * handler can show inline feedback before persisting.
  */
-export async function getInProgressPosts({ limit = 3 } = {}) {
-  if (config.mock) {
+export async function validateCredentials(credentials) {
+  try {
+    const creds = credsOrDefault(credentials);
+    if (!creds.apiKey) return { ok: false, error: 'API key required' };
+    const res = await fetchWithTimeout(
+      `${creds.baseUrl}/v2/post_statuses`,
+      {
+        headers: {
+          Authorization: `Bearer ${creds.apiKey}`,
+          'Featurebase-Version': creds.version,
+        },
+      },
+      creds.timeoutMs,
+    );
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: `Featurebase rejected the key (${res.status})` };
+    }
+    return { ok: true, status: 200 };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function getInProgressPosts(credentials, { limit = 3 } = {}) {
+  const creds = credsOrDefault(credentials);
+  if (creds.mock) {
     const { mockInProgressPosts } = await import('./mock.js');
     return (mockInProgressPosts || []).slice(0, limit);
   }
 
-  const statusId = await getStatusIdByType('active');
+  const statusId = await getStatusIdByType(creds, 'active');
   if (!statusId) return [];
 
-  const needle = config.featurebase.category;
+  const needle = creds.category;
   const useClientFilter = Boolean(needle);
   const apiLimit = useClientFilter ? 30 : limit;
 
@@ -132,14 +170,9 @@ export async function getInProgressPosts({ limit = 3 } = {}) {
     limit: String(apiLimit),
   });
 
-  const data = await fb(`/v2/posts?${qs.toString()}`, {
-    retries: config.featurebase.retries,
-  });
+  const data = await fb(creds, `/v2/posts?${qs.toString()}`, { retries: creds.retries });
   const all = data.data || [];
 
-  // Posts use boardId for board filtering, not categories array. Match by
-  // board name substring against the post's board if present. Fall back to
-  // matching title (some Featurebase setups don't tag boards on posts).
   const filtered = needle
     ? all.filter((p) => {
         const board = p.board?.name || p.boardName || '';
@@ -148,7 +181,6 @@ export async function getInProgressPosts({ limit = 3 } = {}) {
       })
     : all;
 
-  // Normalize the shape so canvas.js can treat posts and changelogs the same.
   return filtered.slice(0, limit).map((p) => ({
     id: p.id,
     title: p.title,
@@ -158,24 +190,22 @@ export async function getInProgressPosts({ limit = 3 } = {}) {
   }));
 }
 
-export async function getChangelogById(id) {
+export async function getChangelogById(credentials, id) {
   if (!id) return null;
-  if (config.mock) {
+  const creds = credsOrDefault(credentials);
+  if (creds.mock) {
     const { mockChangelogs } = await import('./mock.js');
     return mockChangelogs.find((e) => e.id === id) || null;
   }
   const qs = new URLSearchParams({ id });
-  const data = await fb(`/v2/changelogs?${qs.toString()}`, {
-    retries: config.featurebase.retries,
-  });
+  const data = await fb(creds, `/v2/changelogs?${qs.toString()}`, { retries: creds.retries });
   const list = data.data || [];
   return list[0] || null;
 }
 
-export async function getChangelogs({ daysBack = null } = {}) {
-  if (config.mock) {
-    // Apply the same daysBack filter to mocks so the UI behaves the same in
-    // mock mode as in production.
+export async function getChangelogs(credentials, { daysBack = null } = {}) {
+  const creds = credsOrDefault(credentials);
+  if (creds.mock) {
     if (!daysBack) return mockChangelogs;
     const cutoff = Date.now() - daysBack * 86400 * 1000;
     return mockChangelogs.filter(
@@ -183,11 +213,9 @@ export async function getChangelogs({ daysBack = null } = {}) {
     );
   }
 
-  const needle = config.featurebase.category;
-  // When filtering client-side (category or daysBack), fetch a wider batch
-  // so we don't miss matches sitting beyond the first `maxItems` rows.
+  const needle = creds.category;
   const useClientFilter = Boolean(needle) || Boolean(daysBack);
-  const apiLimit = useClientFilter ? CLIENT_FILTER_FETCH_LIMIT : config.maxItems;
+  const apiLimit = useClientFilter ? CLIENT_FILTER_FETCH_LIMIT : creds.maxItems;
 
   const qs = new URLSearchParams({
     state: 'live',
@@ -200,15 +228,11 @@ export async function getChangelogs({ daysBack = null } = {}) {
     qs.set('startDate', startDate.toISOString());
   }
 
-  const data = await fb(`/v2/changelogs?${qs.toString()}`, {
-    retries: config.featurebase.retries,
-  });
+  const data = await fb(creds, `/v2/changelogs?${qs.toString()}`, { retries: creds.retries });
   const all = data.data || [];
-  // Visibility filter first — drop entries Featurebase itself hides from
-  // public surfaces. Then category filter.
   const visible = all.filter(isPubliclyVisible);
   const filtered = needle
     ? visible.filter((entry) => matchesCategory(entry, needle))
     : visible;
-  return filtered.slice(0, config.maxItems);
+  return filtered.slice(0, creds.maxItems);
 }
