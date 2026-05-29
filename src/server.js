@@ -10,7 +10,7 @@ import {
 } from './featurebase.js';
 import { homeCanvas, detailCanvas, errorCanvas, needsSetupCanvas } from './canvas.js';
 import { registerAuthRoutes } from './auth-routes.js';
-import { isMultiTenantEnabled } from './intercom.js';
+import { isMultiTenantEnabled, verifyCanvasKitSignature } from './intercom.js';
 import {
   dbAvailable,
   findTenantByWorkspace,
@@ -24,7 +24,16 @@ const app = express();
 // Trust Railway / nginx / Cloudflare X-Forwarded-* headers so req.protocol
 // reports 'https' in production. Needed for absolute sheet URLs.
 app.set('trust proxy', true);
-app.use(express.json());
+
+// Capture raw body for HMAC verification. Intercom signs the EXACT bytes
+// it sent; we need the unparsed payload to recompute the signature.
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
 app.use('/assets', express.static(assetsDir, { maxAge: '7d', immutable: false }));
 
 app.use((req, res, next) => {
@@ -480,7 +489,7 @@ function configSavedResponse(saved) {
   };
 }
 
-app.post('/configure', async (req, res) => {
+app.post('/configure', verifyCanvasKitSignature, async (req, res) => {
   res.set('Cache-Control', 'no-store');
 
   const componentId = req.body?.component_id || '';
@@ -557,8 +566,11 @@ app.post('/configure', async (req, res) => {
   res.send(configureCanvas(readConfig(req), opts));
 });
 
-app.post('/initialize', renderCanvas);
-app.post('/submit', renderCanvas);
+// Signature middleware short-circuits to next() in single-tenant deploys
+// (INTERCOM_CLIENT_SECRET unset). In multi-tenant production it rejects any
+// request not signed with our app's client secret.
+app.post('/initialize', verifyCanvasKitSignature, renderCanvas);
+app.post('/submit', verifyCanvasKitSignature, renderCanvas);
 
 // Backward-compat fallback. An earlier Loop version used sheet actions
 // pointing at /sheet/:id. Intercom's Messenger caches canvases per session,
