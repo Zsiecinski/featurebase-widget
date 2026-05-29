@@ -201,6 +201,7 @@ export function homeCanvas(entries, opts = {}) {
   const showPills = opts.showPills !== false;
   const showFullRoadmap = opts.showFullRoadmap !== false;
   const showComments = opts.showComments !== false;
+  const collapsedCount = Number(opts.collapsedCount) || COLLAPSED_COUNT;
   const headerText = opts.headerText || 'Recently shipped';
   const comingHeaderText = opts.comingHeaderText || 'Coming next';
   const footerLabel = opts.footerLabel || 'See full roadmap';
@@ -210,7 +211,7 @@ export function homeCanvas(entries, opts = {}) {
   const showBoardName = !config.featurebase.category;
 
   const total = entries.length;
-  const visible = expanded ? entries : entries.slice(0, COLLAPSED_COUNT);
+  const visible = expanded ? entries : entries.slice(0, collapsedCount);
   const hiddenCount = Math.max(total - visible.length, 0);
 
   const components = [
@@ -264,7 +265,7 @@ export function homeCanvas(entries, opts = {}) {
     components.push({ type: 'list', id: 'shipped_list', items });
   }
 
-  if (total > COLLAPSED_COUNT) {
+  if (total > collapsedCount) {
     components.push({ type: 'spacer', id: 'sp_toggle', size: 'xs' });
     if (!expanded) {
       components.push({

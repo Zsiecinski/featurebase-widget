@@ -152,6 +152,9 @@ function readConfig(req) {
     showComingNext: opts.show_coming_next === 'true',       // default false
     showFullRoadmap: opts.show_full_roadmap !== 'false',    // default true
     showComments: opts.show_comments !== 'false',           // default true
+    // Counts (defaults match the original hardcoded behavior)
+    collapsedCount: Number(opts.collapsed_count) || 3,
+    comingNextCount: Number(opts.coming_next_count) || 3,
     // Text overrides (empty = use default in canvas builder)
     headerText: opts.header_text || '',
     comingHeaderText: opts.coming_header_text || '',
@@ -187,6 +190,8 @@ async function renderCanvas(req, res) {
       show_coming_next: v.show_coming_next === 'true' ? 'true' : 'false',
       show_full_roadmap: v.show_full_roadmap === 'false' ? 'false' : 'true',
       show_comments: v.show_comments === 'false' ? 'false' : 'true',
+      collapsed_count: ['3', '5', '8'].includes(v.collapsed_count) ? v.collapsed_count : '3',
+      coming_next_count: ['2', '3', '5'].includes(v.coming_next_count) ? v.coming_next_count : '3',
       header_text: (v.header_text || '').trim(),
       coming_header_text: (v.coming_header_text || '').trim(),
       footer_label: (v.footer_label || '').trim(),
@@ -208,7 +213,9 @@ async function renderCanvas(req, res) {
     // otherwise skip the extra Featurebase round-trip.
     const [entries, inProgress] = await Promise.all([
       getChangelogs(),
-      config.showComingNext ? getInProgressPosts({ limit: 3 }) : Promise.resolve([]),
+      config.showComingNext
+        ? getInProgressPosts({ limit: config.comingNextCount })
+        : Promise.resolve([]),
     ]);
     res.send(
       homeCanvas(entries, {
@@ -219,6 +226,7 @@ async function renderCanvas(req, res) {
         showPills: config.showPills,
         showFullRoadmap: config.showFullRoadmap,
         showComments: config.showComments,
+        collapsedCount: config.collapsedCount,
         headerText: config.headerText,
         comingHeaderText: config.comingHeaderText,
         footerLabel: config.footerLabel,
@@ -273,6 +281,35 @@ function configureCanvas(current) {
             'Yes — show in-progress roadmap items', 'No — only show recently shipped'),
           toggle('show_full_roadmap', "Show 'See full roadmap' button", current.showFullRoadmap),
           toggle('show_comments', 'Show comment counts on items', current.showComments),
+
+          { type: 'spacer', id: 'cfg_sp_counts', size: 's' },
+          { type: 'divider', id: 'cfg_div_counts' },
+          { type: 'spacer', id: 'cfg_sp_counts2', size: 'xs' },
+
+          // ─── Counts ───
+          { type: 'text', id: 'cfg_h_counts', text: 'Counts', style: 'header' },
+          {
+            type: 'single-select',
+            id: 'collapsed_count',
+            label: "Items shown before 'Show more'",
+            value: String(current.collapsedCount || 3),
+            options: [
+              { type: 'option', id: '3', text: '3 items' },
+              { type: 'option', id: '5', text: '5 items' },
+              { type: 'option', id: '8', text: '8 items' },
+            ],
+          },
+          {
+            type: 'single-select',
+            id: 'coming_next_count',
+            label: "Items in 'Coming next' section",
+            value: String(current.comingNextCount || 3),
+            options: [
+              { type: 'option', id: '2', text: '2 items' },
+              { type: 'option', id: '3', text: '3 items' },
+              { type: 'option', id: '5', text: '5 items' },
+            ],
+          },
 
           { type: 'spacer', id: 'cfg_sp2', size: 's' },
           { type: 'divider', id: 'cfg_div2' },
