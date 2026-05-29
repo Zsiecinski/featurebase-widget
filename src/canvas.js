@@ -192,14 +192,15 @@ export function homeCanvas(entries, opts = {}) {
       // FIXED metadata) wins over the entry's featuredImage. Most Featurebase
       // entries don't set a featuredImage anyway, so this trade-off costs us
       // very little and gives the list a uniform, scannable visual rhythm.
+      // The badge PNG itself is already a circle, so we don't need
+      // rounded_image (which some Canvas Kit versions don't support on list
+      // items and rejects the whole canvas with a 'failed to set up' error).
       const badgeUrl = typeBadgeImageUrl(e, baseUrl);
       const featured = extractImage(e);
       if (badgeUrl) {
         item.image = badgeUrl;
-        item.rounded_image = true;
       } else if (featured) {
         item.image = featured;
-        item.rounded_image = false;
       }
       return item;
     });

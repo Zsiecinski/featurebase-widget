@@ -139,7 +139,8 @@ test('homeCanvas: each item gets the correct type-badge PNG as item.image', () =
   assert.equal(itemA.image, 'https://loop.example.com/assets/badge-new.png');
   assert.equal(itemB.image, 'https://loop.example.com/assets/badge-improved.png');
   assert.equal(itemC.image, 'https://loop.example.com/assets/badge-fixed.png');
-  assert.equal(itemA.rounded_image, true);
+  // Don't set rounded_image — some Canvas Kit versions reject it on list items.
+  assert.equal(itemA.rounded_image, undefined);
 });
 
 test('homeCanvas: subtitle no longer carries the type word (badge image carries it)', () => {
@@ -172,7 +173,6 @@ test('homeCanvas: featuredImage is used when entry has no type tag', () => {
   );
   const item = comp(out).find((c) => c.type === 'list').items[0];
   assert.equal(item.image, 'https://x.test/hero.png');
-  assert.equal(item.rounded_image, false);
 });
 
 test('detailCanvas: meta line includes plain type word (no emoji)', () => {
