@@ -207,7 +207,7 @@ async function renderCanvas(req, res) {
       footer_label: (v.footer_label || '').trim(),
       footer_url: (v.footer_url || '').trim(),
     };
-    return res.send(configSavedCanvas(saved));
+    return res.send(configSavedResponse(saved));
   }
 
   try {
@@ -370,46 +370,18 @@ function configureCanvas(current) {
   };
 }
 
-function configSavedCanvas(saved) {
-  // Brief confirmation text summarizing the most notable changes.
-  const summary = [];
-  if (saved.show_coming_next === 'true') summary.push("Coming next section is enabled.");
-  if (saved.show_pills === 'false') summary.push('Pill badges are hidden.');
-  if (saved.show_full_roadmap === 'false') summary.push('Roadmap footer button is hidden.');
-  if (saved.show_comments === 'false') summary.push('Comment counts are hidden.');
-  if (saved.header_text) summary.push(`Header text: "${saved.header_text}".`);
-
-  const canvas = {
-    content: {
-      components: [
-        { type: 'text', id: 'cfg_ok', text: 'Settings saved', style: 'header' },
-        {
-          type: 'text',
-          id: 'cfg_ok_body',
-          text: summary.length > 0
-            ? summary.join(' ')
-            : 'Loop will render with the default settings.',
-          style: 'paragraph',
-        },
-      ],
-    },
-    // stored_data is per-card-session, not per-instance — but if Intercom's
-    // config flow happens to read from here too, it's harmless to mirror.
-    stored_data: saved,
-  };
-
-  // Intercom Canvas Kit has used different field names across versions:
-  // - card_creation_options (older)
-  // - results (newer, simpler)
-  // Sending both maximizes the chance of one being recognized. Whichever
-  // Intercom honours, our readConfig() handles both on the way back.
+function configSavedResponse(saved) {
+  // CRITICAL: do NOT include a `canvas` field. Intercom's configure flow
+  // interprets any canvas in the response as "render this content in the
+  // modal" — which keeps the modal open and looks like a page refresh.
+  //
+  // For the save to actually persist + close the modal, the response must
+  // be ONLY the options payload. Different Canvas Kit versions look for
+  // the data under different keys; we send all known variants.
   return {
-    canvas,
     card_creation_options: saved,
     results: saved,
-    // Event signal Intercom sometimes uses to "complete" the configure flow
-    // and return the teammate to the previous screen.
-    event: { type: 'completed' },
+    stored_data: saved,
   };
 }
 
