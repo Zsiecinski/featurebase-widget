@@ -47,6 +47,10 @@ const renders = [
     svg: await readFile(join(assets, 'pill-fixed.svg')),
     width: 360, height: 120, name: 'pill-fixed.png',
   },
+  {
+    svg: await readFile(join(assets, 'pill-in-progress.svg')),
+    width: 360, height: 120, name: 'pill-in-progress.png',
+  },
 ];
 
 for (const r of renders) {

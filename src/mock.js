@@ -11,6 +11,23 @@ const heroImage = 'https://featurebase-widget-production.up.railway.app/assets/l
 // (New / Improved / Fixed) plus one board tag.
 const BOARD = 'Kiwi Size Chart & Recommender';
 
+export const mockInProgressPosts = [
+  {
+    id: 'mock_ip1',
+    title: 'AI-powered size recommendations v3',
+    url: 'https://staytuned.featurebase.app/p/mock-ai-v3',
+    upvotes: 47,
+    commentCount: 12,
+  },
+  {
+    id: 'mock_ip2',
+    title: 'Bulk size chart editor',
+    url: 'https://staytuned.featurebase.app/p/mock-bulk-editor',
+    upvotes: 23,
+    commentCount: 4,
+  },
+];
+
 export const mockChangelogs = [
   {
     id: 'mock_c1',

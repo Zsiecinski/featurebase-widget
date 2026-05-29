@@ -56,6 +56,10 @@ const TYPE_BADGE_IMAGE = {
 const BADGE_IMAGE_WIDTH = 60;
 const BADGE_IMAGE_HEIGHT = 20;
 
+// In-progress posts in the "Coming next" section get a fixed blue pill —
+// they don't have NEW/IMPROVED/FIXED type tags, just "currently being built."
+const IN_PROGRESS_BADGE_IMAGE = '/assets/pill-in-progress.png';
+
 function categoryNames(entry) {
   return (entry.categories || []).map((c) =>
     typeof c === 'string' ? c : c?.name || '',
@@ -178,14 +182,21 @@ function truncate(text, limit) {
 /**
  * @param {Array} entries
  * @param {object} [opts]
- * @param {boolean} [opts.expanded]  - Show all entries vs. top COLLAPSED_COUNT.
- * @param {string}  [opts.baseUrl]   - Public URL of this server (e.g.
+ * @param {boolean} [opts.expanded]      - Show all entries vs. top COLLAPSED_COUNT.
+ * @param {string}  [opts.baseUrl]       - Public URL of this server (e.g.
  *   "https://featurebase-widget-production.up.railway.app"). Used to build
  *   absolute image URLs for type badges so Intercom can fetch them.
+ * @param {Array}   [opts.inProgress]    - Optional list of in-progress posts.
+ *   When non-empty AND opts.showComingNext is true, renders a "Coming next"
+ *   section below the shipped list.
+ * @param {boolean} [opts.showComingNext] - Per-instance flag from the
+ *   teammate's Loop settings (Configure URL flow).
  */
 export function homeCanvas(entries, opts = {}) {
   const expanded = Boolean(opts.expanded);
   const baseUrl = opts.baseUrl || '';
+  const inProgress = opts.inProgress || [];
+  const showComingNext = Boolean(opts.showComingNext) && inProgress.length > 0;
   // Show the board category name (e.g. "Kiwi Sizing") only when no
   // category filter is set — otherwise every row repeats the same value.
   const showBoardName = !config.featurebase.category;
@@ -264,6 +275,51 @@ export function homeCanvas(entries, opts = {}) {
       });
     }
   }
+
+  // ─── Coming Next section ────────────────────────────────────────────
+  if (showComingNext) {
+    components.push(
+      { type: 'spacer', id: 'sp_coming_top', size: 's' },
+      { type: 'divider', id: 'd_coming' },
+      { type: 'spacer', id: 'sp_coming_top2', size: 's' },
+      {
+        type: 'text',
+        id: 'coming_header',
+        text: 'Coming next',
+        style: 'header',
+      },
+      {
+        type: 'text',
+        id: 'coming_subhead',
+        text: "What we're actively building.",
+        style: 'muted',
+      },
+      { type: 'spacer', id: 'sp_coming_list', size: 'xs' },
+    );
+
+    const comingItems = inProgress.map((p) => {
+      const item = {
+        type: 'item',
+        id: `coming_${p.id}`,
+        title: p.title,
+        action: { type: 'url', url: p.url },
+        image: `${baseUrl.replace(/\/$/, '')}${IN_PROGRESS_BADGE_IMAGE}`,
+        image_width: BADGE_IMAGE_WIDTH,
+        image_height: BADGE_IMAGE_HEIGHT,
+      };
+      const parts = [];
+      if (typeof p.upvotes === 'number' && p.upvotes > 0) {
+        parts.push(`${p.upvotes} ${p.upvotes === 1 ? 'upvote' : 'upvotes'}`);
+      }
+      if (typeof p.commentCount === 'number' && p.commentCount > 0) {
+        parts.push(`${p.commentCount} ${p.commentCount === 1 ? 'comment' : 'comments'}`);
+      }
+      if (parts.length > 0) item.subtitle = parts.join(' · ');
+      return item;
+    });
+    components.push({ type: 'list', id: 'coming_list', items: comingItems });
+  }
+  // ────────────────────────────────────────────────────────────────────
 
   components.push(
     { type: 'spacer', id: 'sp_footer', size: 'xs' },

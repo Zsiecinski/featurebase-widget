@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import { getChangelogs, getChangelogById } from './featurebase.js';
+import { getChangelogs, getChangelogById, getInProgressPosts } from './featurebase.js';
 import { homeCanvas, detailCanvas, errorCanvas } from './canvas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -139,12 +139,23 @@ function readState(req) {
   return { expanded, componentId };
 }
 
+// Per-instance configuration is stored in card_creation_options. Set by the
+// Configure URL flow when a teammate adds Loop to a Messenger surface,
+// returned to us on every subsequent /initialize call for that instance.
+function readConfig(req) {
+  const opts = req.body?.card_creation_options || {};
+  return {
+    showComingNext: opts.show_coming_next === 'true',
+  };
+}
+
 function baseUrlFor(req) {
   return `${req.protocol}://${req.get('host')}`;
 }
 
 async function renderCanvas(req, res) {
   const { expanded, componentId } = readState(req);
+  const config = readConfig(req);
   const baseUrl = baseUrlFor(req);
 
   // Tell every intermediary — Intercom's backend cache, any CDN, the browser —
@@ -155,6 +166,13 @@ async function renderCanvas(req, res) {
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
 
+  // Configure-save click from the configure canvas → persist the choice as
+  // card_creation_options and acknowledge.
+  if (componentId === 'save_config') {
+    const showComingNext = req.body?.input_values?.show_coming_next === 'true';
+    return res.send(configSavedCanvas(showComingNext));
+  }
+
   try {
     // Item tapped — render the detail view of that entry.
     if (componentId.startsWith('item_')) {
@@ -164,13 +182,97 @@ async function renderCanvas(req, res) {
     }
 
     // Otherwise (cold open, see_more/show_less, back_to_home) — home view.
-    const entries = await getChangelogs();
-    res.send(homeCanvas(entries, { expanded, baseUrl }));
+    // Fetch in-progress posts in parallel only if Coming Next is enabled;
+    // otherwise skip the extra Featurebase round-trip.
+    const [entries, inProgress] = await Promise.all([
+      getChangelogs(),
+      config.showComingNext ? getInProgressPosts({ limit: 3 }) : Promise.resolve([]),
+    ]);
+    res.send(
+      homeCanvas(entries, {
+        expanded,
+        baseUrl,
+        inProgress,
+        showComingNext: config.showComingNext,
+      }),
+    );
   } catch (err) {
     console.error('[loop] failed:', err.message);
     res.send(errorCanvas());
   }
 }
+
+// ---------------------------------------------------------------------------
+// Configure flow: Intercom calls this URL when a teammate adds Loop to a
+// surface (Messenger Home, etc.). The returned canvas's form values are saved
+// as card_creation_options on Save, and passed back to us on every render.
+// ---------------------------------------------------------------------------
+function configureCanvas(currentShowComingNext = false) {
+  return {
+    canvas: {
+      content: {
+        components: [
+          { type: 'text', id: 'cfg_title', text: 'Loop settings', style: 'header' },
+          {
+            type: 'text',
+            id: 'cfg_sub',
+            text: "Configure what's shown in the Recently Shipped card.",
+            style: 'muted',
+          },
+          { type: 'spacer', id: 'cfg_sp1', size: 's' },
+          {
+            type: 'single-select',
+            id: 'show_coming_next',
+            label: "Show 'Coming next' section",
+            value: currentShowComingNext ? 'true' : 'false',
+            options: [
+              { type: 'option', id: 'true', text: 'Yes — show in-progress roadmap items' },
+              { type: 'option', id: 'false', text: 'No — only show recently shipped' },
+            ],
+          },
+          { type: 'spacer', id: 'cfg_sp2', size: 's' },
+          {
+            type: 'button',
+            id: 'save_config',
+            label: 'Save settings',
+            style: 'primary',
+            action: { type: 'submit' },
+          },
+        ],
+      },
+    },
+  };
+}
+
+function configSavedCanvas(showComingNext) {
+  return {
+    canvas: {
+      content: {
+        components: [
+          { type: 'text', id: 'cfg_ok', text: 'Settings saved', style: 'header' },
+          {
+            type: 'text',
+            id: 'cfg_ok_body',
+            text: showComingNext
+              ? "Loop will show the 'Coming next' section to users."
+              : "Loop will show only recently shipped items.",
+            style: 'paragraph',
+          },
+        ],
+      },
+    },
+    // Intercom persists this for the lifetime of the card instance.
+    card_creation_options: {
+      show_coming_next: showComingNext ? 'true' : 'false',
+    },
+  };
+}
+
+app.post('/configure', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const current = readConfig(req).showComingNext;
+  res.send(configureCanvas(current));
+});
 
 app.post('/initialize', renderCanvas);
 app.post('/submit', renderCanvas);

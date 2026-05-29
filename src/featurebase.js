@@ -90,6 +90,74 @@ function isPubliclyVisible(entry) {
  * Look up a single changelog entry by id (or slug, per Featurebase docs).
  * Returns null if not found.
  */
+// Cache status IDs by their workflow type ('reviewing', 'active', 'completed',
+// etc.). Featurebase posts are filtered by statusId (a 24-char hex), but we
+// know which type we care about, so we look up the id once and cache.
+const statusIdByType = new Map();
+
+async function getStatusIdByType(type) {
+  if (statusIdByType.has(type)) return statusIdByType.get(type);
+  const data = await fb('/v2/post_statuses', {
+    retries: config.featurebase.retries,
+  });
+  const list = Array.isArray(data) ? data : data.data || [];
+  const match = list.find((s) => s.type === type);
+  if (!match) return null;
+  statusIdByType.set(type, match.id);
+  return match.id;
+}
+
+/**
+ * Fetches active "in progress" posts from the Featurebase roadmap. Used by
+ * the home canvas's optional "Coming next" section to give users a forward-
+ * looking glimpse of what's being built.
+ */
+export async function getInProgressPosts({ limit = 3 } = {}) {
+  if (config.mock) {
+    const { mockInProgressPosts } = await import('./mock.js');
+    return (mockInProgressPosts || []).slice(0, limit);
+  }
+
+  const statusId = await getStatusIdByType('active');
+  if (!statusId) return [];
+
+  const needle = config.featurebase.category;
+  const useClientFilter = Boolean(needle);
+  const apiLimit = useClientFilter ? 30 : limit;
+
+  const qs = new URLSearchParams({
+    statusId,
+    sortBy: 'upvotes',
+    sortOrder: 'desc',
+    limit: String(apiLimit),
+  });
+
+  const data = await fb(`/v2/posts?${qs.toString()}`, {
+    retries: config.featurebase.retries,
+  });
+  const all = data.data || [];
+
+  // Posts use boardId for board filtering, not categories array. Match by
+  // board name substring against the post's board if present. Fall back to
+  // matching title (some Featurebase setups don't tag boards on posts).
+  const filtered = needle
+    ? all.filter((p) => {
+        const board = p.board?.name || p.boardName || '';
+        if (board && board.toLowerCase().includes(needle.toLowerCase())) return true;
+        return (p.title || '').toLowerCase().includes(needle.toLowerCase());
+      })
+    : all;
+
+  // Normalize the shape so canvas.js can treat posts and changelogs the same.
+  return filtered.slice(0, limit).map((p) => ({
+    id: p.id,
+    title: p.title,
+    url: p.postUrl || p.url,
+    upvotes: p.upvotes || 0,
+    commentCount: p.commentCount || 0,
+  }));
+}
+
 export async function getChangelogById(id) {
   if (!id) return null;
   if (config.mock) {
