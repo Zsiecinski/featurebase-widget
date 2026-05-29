@@ -174,6 +174,71 @@ app.post('/sheet/:id', (_req, res) => {
   res.redirect(302, config.roadmapUrl);
 });
 
+// ---------------------------------------------------------------------------
+// Debug endpoint — gated by DEBUG_TOKEN env var. Returns the raw
+// /v2/changelogs response so we can inspect which fields Featurebase actually
+// populates (isPublished, state, publishedLocales, etc.).
+// Remove the DEBUG_TOKEN env var when done diagnosing to disable the route.
+// ---------------------------------------------------------------------------
+app.get('/debug/changelogs', async (req, res) => {
+  const required = process.env.DEBUG_TOKEN;
+  if (!required) {
+    return res.status(404).json({ error: 'debug endpoint disabled (set DEBUG_TOKEN env var to enable)' });
+  }
+  if (req.query.token !== required) {
+    return res.status(401).json({ error: 'invalid or missing token' });
+  }
+
+  try {
+    const url = `${config.featurebase.baseUrl}/v2/changelogs?state=live&limit=20`;
+    const r = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${config.featurebase.apiKey}`,
+        'Featurebase-Version': config.featurebase.version,
+      },
+    });
+    const raw = await r.json();
+    const entries = raw.data || [];
+
+    // Summary view of every entry's diagnostic fields — the ones most likely
+    // to explain why the public URL is empty.
+    const summary = entries.map((e) => ({
+      id: e.id,
+      title: e.title,
+      slug: e.slug,
+      slugs: e.slugs,
+      url: e.url,
+      date: e.date,
+      state: e.state,
+      isPublished: e.isPublished,
+      isDraftDiffersFromLive: e.isDraftDiffersFromLive,
+      locale: e.locale,
+      publishedLocales: e.publishedLocales,
+      availableLocales: e.availableLocales,
+      categories: (e.categories || []).map((c) =>
+        typeof c === 'string' ? c : c?.name,
+      ),
+      commentCount: e.commentCount,
+      hasMarkdownContent: Boolean(e.markdownContent),
+      markdownContentLength: e.markdownContent?.length || 0,
+      hasFeaturedImage: Boolean(e.featuredImage),
+      emailSentToSubscribers: e.emailSentToSubscribers,
+    }));
+
+    res.json({
+      meta: {
+        count: entries.length,
+        all_field_keys: entries[0] ? Object.keys(entries[0]).sort() : [],
+      },
+      summary,
+      // Full raw shape of the first entry so we see every field's value.
+      first_entry_raw: entries[0] || null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {
     const mode = config.mock ? ' (MOCK mode — no API key set)' : '';
