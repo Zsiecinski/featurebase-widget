@@ -123,7 +123,7 @@ function entrySubtitle(entry, { showBoard, showComments = true } = {}) {
     if (board) parts.push(board);
   }
   const when = formatShippedDate(entry.date);
-  if (when) parts.push(`Shipped ${when}`);
+  if (when) parts.push(`Updated ${when}`);
   if (showComments && typeof entry.commentCount === 'number' && entry.commentCount > 0) {
     parts.push(
       `${entry.commentCount} ${entry.commentCount === 1 ? 'comment' : 'comments'}`,
@@ -420,7 +420,7 @@ export function detailCanvas(entry, opts = {}) {
   // when a category filter is active (would just repeat for every entry).
   const meta = [];
   const when = formatShippedDate(entry.date);
-  if (when) meta.push(`Shipped ${when}`);
+  if (when) meta.push(`Updated ${when}`);
   if (!config.featurebase.category) {
     const board = boardCategoryName(entry);
     if (board) meta.push(board);

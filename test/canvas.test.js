@@ -145,7 +145,7 @@ test('homeCanvas: subtitle has no type word (pill carries it visually)', () => {
   assert.doesNotMatch(itemA.subtitle, /^NEW/);
   assert.doesNotMatch(itemA.subtitle, /^IMPROVED/);
   assert.doesNotMatch(itemA.subtitle, /^FIXED/);
-  assert.match(itemA.subtitle, /Shipped/);
+  assert.match(itemA.subtitle, /Updated/);
 });
 
 test('homeCanvas: each item gets pill PNG with 60x20 dimensions', () => {
@@ -222,7 +222,7 @@ test('detailCanvas: pill at top + title + meta (no type word) + divider + body +
   // Meta drops the type word (pill carries it)
   const meta = c.find((x) => x.id === 'd_meta');
   assert.doesNotMatch(meta.text, /^NEW/);
-  assert.match(meta.text, /Shipped 2 days ago · Kiwi Sizing · 3 comments/);
+  assert.match(meta.text, /Updated 2 days ago · Kiwi Sizing · 3 comments/);
 
   // Divider between meta and body
   assert.ok(c.find((x) => x.id === 'd_divider'));
@@ -250,7 +250,7 @@ test('detailCanvas: meta hides board name when FEATUREBASE_CATEGORY is set', asy
     });
     const meta = out.canvas.content.components.find((x) => x.id === 'd_meta');
     assert.doesNotMatch(meta.text, /Kiwi Sizing/);
-    assert.match(meta.text, /Shipped today/);
+    assert.match(meta.text, /Updated today/);
   } finally {
     delete process.env.FEATUREBASE_CATEGORY;
   }
