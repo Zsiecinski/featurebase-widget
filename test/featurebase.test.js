@@ -81,6 +81,100 @@ test('getChangelogs: returns [] when API returns empty data array', async () => 
   assert.deepEqual(out, []);
 });
 
+test('getChangelogs: hides entries with notifications.<locale>.hideFromBoardAndWidgets=true', async () => {
+  stubFetch(async () =>
+    jsonResponse({
+      data: [
+        {
+          id: 'visible',
+          title: 'Public',
+          url: 'https://x.test/1',
+          locale: 'en',
+          notifications: { en: { hideFromBoardAndWidgets: false } },
+        },
+        {
+          id: 'hidden',
+          title: 'Hidden by flag',
+          url: 'https://x.test/2',
+          locale: 'en',
+          notifications: { en: { hideFromBoardAndWidgets: true } },
+        },
+      ],
+    }),
+  );
+
+  const out = await getChangelogs();
+  assert.equal(out.length, 1);
+  assert.equal(out[0].id, 'visible');
+});
+
+test('getChangelogs: hides entries with allowedSegmentIds populated', async () => {
+  stubFetch(async () =>
+    jsonResponse({
+      data: [
+        { id: 'unrestricted', title: 'Public', url: 'https://x.test/1', allowedSegmentIds: [] },
+        { id: 'segment_only', title: 'Restricted', url: 'https://x.test/2', allowedSegmentIds: ['seg_123'] },
+      ],
+    }),
+  );
+
+  const out = await getChangelogs();
+  assert.equal(out.length, 1);
+  assert.equal(out[0].id, 'unrestricted');
+});
+
+test('getChangelogs: missing notifications object is treated as visible', async () => {
+  stubFetch(async () =>
+    jsonResponse({
+      data: [{ id: 'plain', title: 'No notifications field', url: 'https://x.test/p' }],
+    }),
+  );
+  const out = await getChangelogs();
+  assert.equal(out.length, 1);
+});
+
+test('getChangelogs: visibility filter applies before category filter', async () => {
+  process.env.FEATUREBASE_CATEGORY = 'Kiwi';
+  try {
+    stubFetch(async () =>
+      jsonResponse({
+        data: [
+          {
+            id: 'kiwi_hidden',
+            title: 'Hidden Kiwi entry',
+            url: 'https://x.test/1',
+            locale: 'en',
+            categories: ['Kiwi Sizing'],
+            notifications: { en: { hideFromBoardAndWidgets: true } },
+          },
+          {
+            id: 'kiwi_visible',
+            title: 'Public Kiwi entry',
+            url: 'https://x.test/2',
+            locale: 'en',
+            categories: ['Kiwi Sizing'],
+            notifications: { en: { hideFromBoardAndWidgets: false } },
+          },
+          {
+            id: 'tickets_visible',
+            title: 'Public tickets entry',
+            url: 'https://x.test/3',
+            locale: 'en',
+            categories: ['Tickets'],
+            notifications: { en: { hideFromBoardAndWidgets: false } },
+          },
+        ],
+      }),
+    );
+
+    const out = await getChangelogs();
+    assert.equal(out.length, 1);
+    assert.equal(out[0].id, 'kiwi_visible');
+  } finally {
+    delete process.env.FEATUREBASE_CATEGORY;
+  }
+});
+
 test('getChangelogs: filters by category substring client-side (case-insensitive)', async () => {
   process.env.FEATUREBASE_CATEGORY = 'kiwi';
   try {
