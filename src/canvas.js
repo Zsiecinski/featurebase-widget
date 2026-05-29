@@ -87,9 +87,25 @@ function boardCategoryName(entry) {
   return names.find((name) => !TYPE_CATEGORIES.has(name.toLowerCase())) || '';
 }
 
+// Inline-text type badge with colored circle emoji prefix. Plain text falls
+// back gracefully if the renderer strips the emoji.
+const TYPE_ICONS = {
+  NEW: '🟢',
+  IMPROVED: '🟣',
+  FIXED: '🟠',
+};
+
+function typeBadgeText(entry) {
+  const badge = typeBadge(entry);
+  if (!badge) return '';
+  const icon = TYPE_ICONS[badge];
+  return icon ? `${icon} ${badge}` : badge;
+}
+
 function entrySubtitle(entry, { showBoard } = {}) {
   const parts = [];
-  // Type badge is now carried by item.image, so drop it from the subtitle.
+  const badge = typeBadgeText(entry);
+  if (badge) parts.push(badge);
   if (showBoard) {
     const board = boardCategoryName(entry);
     if (board) parts.push(board);
@@ -188,18 +204,13 @@ export function homeCanvas(entries, opts = {}) {
       };
       if (subtitle) item.subtitle = subtitle;
 
-      // Image priority: type badge (visual chip carrying the NEW/IMPROVED/
-      // FIXED metadata) wins over the entry's featuredImage. Most Featurebase
-      // entries don't set a featuredImage anyway, so this trade-off costs us
-      // very little and gives the list a uniform, scannable visual rhythm.
-      // The badge PNG itself is already a circle, so we don't need
-      // rounded_image (which some Canvas Kit versions don't support on list
-      // items and rejects the whole canvas with a 'failed to set up' error).
-      const badgeUrl = typeBadgeImageUrl(e, baseUrl);
+      // Only attach featuredImage. Type badge is now carried inline in the
+      // subtitle (text + emoji). External image URLs were causing Intercom
+      // to reject the entire canvas with a "failed to set up that card"
+      // error — even though the images served correctly. Safer to keep list
+      // items as text-only and use Featurebase's own featuredImage when set.
       const featured = extractImage(e);
-      if (badgeUrl) {
-        item.image = badgeUrl;
-      } else if (featured) {
+      if (featured) {
         item.image = featured;
       }
       return item;
