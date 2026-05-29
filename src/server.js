@@ -202,28 +202,32 @@ app.get('/debug/changelogs', async (req, res) => {
 
     // Summary view of every entry's diagnostic fields — the ones most likely
     // to explain why the public URL is empty.
-    const summary = entries.map((e) => ({
-      id: e.id,
-      title: e.title,
-      slug: e.slug,
-      slugs: e.slugs,
-      url: e.url,
-      date: e.date,
-      state: e.state,
-      isPublished: e.isPublished,
-      isDraftDiffersFromLive: e.isDraftDiffersFromLive,
-      locale: e.locale,
-      publishedLocales: e.publishedLocales,
-      availableLocales: e.availableLocales,
-      categories: (e.categories || []).map((c) =>
-        typeof c === 'string' ? c : c?.name,
-      ),
-      commentCount: e.commentCount,
-      hasMarkdownContent: Boolean(e.markdownContent),
-      markdownContentLength: e.markdownContent?.length || 0,
-      hasFeaturedImage: Boolean(e.featuredImage),
-      emailSentToSubscribers: e.emailSentToSubscribers,
-    }));
+    const summary = entries.map((e) => {
+      const noteEn = e.notifications?.en || e.notifications?.[e.locale] || {};
+      return {
+        id: e.id,
+        title: e.title,
+        slug: e.slug,
+        url: e.url,
+        date: e.date,
+        state: e.state,
+        isPublished: e.isPublished,
+        isDraftDiffersFromLive: e.isDraftDiffersFromLive,
+        publishedLocales: e.publishedLocales,
+        availableLocales: e.availableLocales,
+        categories: (e.categories || []).map((c) =>
+          typeof c === 'string' ? c : c?.name,
+        ),
+        // ⚠️ Visibility flags — likely culprits for "public URL is empty"
+        hideFromBoardAndWidgets: noteEn.hideFromBoardAndWidgets,
+        scheduledDate: noteEn.scheduledDate,
+        sendEmailNotification: noteEn.sendEmailNotification,
+        allowedSegmentIdsCount: (e.allowedSegmentIds || []).length,
+        commentCount: e.commentCount,
+        markdownContentLength: e.markdownContent?.length || 0,
+        emailSentToSubscribers: e.emailSentToSubscribers,
+      };
+    });
 
     res.json({
       meta: {
