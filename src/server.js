@@ -142,6 +142,14 @@ function readState(req) {
 async function renderCanvas(req, res) {
   const { expanded, componentId } = readState(req);
 
+  // Tell every intermediary — Intercom's backend cache, any CDN, the browser —
+  // never to reuse this response. Canvas Kit responses are personalised and
+  // change based on Featurebase data; serving a stale copy = users seeing
+  // entries we've intentionally hidden.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+
   try {
     // Item tapped — render the detail view of that entry.
     if (componentId.startsWith('item_')) {
