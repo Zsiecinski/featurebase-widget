@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Loop">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Loop concept 1 — infinity">
   <rect width="512" height="512" rx="112" ry="112" fill="#FB7185"/>
+  <!-- Infinity symbol drawn as two interlocking lobes -->
   <path d="M 96 256
            C 96 170 200 170 256 256
            C 312 342 416 342 416 256

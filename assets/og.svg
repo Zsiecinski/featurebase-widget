@@ -1,30 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Loop — close the feedback loop in Messenger">
   <defs>
     <linearGradient id="ogBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1E1B4B"/>
-      <stop offset="100%" stop-color="#0F0A2E"/>
+      <stop offset="0%" stop-color="#FB7185"/>
+      <stop offset="100%" stop-color="#F43F5E"/>
     </linearGradient>
-    <linearGradient id="ogIcon" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#A78BFA"/>
-      <stop offset="100%" stop-color="#6366F1"/>
-    </linearGradient>
-    <radialGradient id="ogGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+    <radialGradient id="ogGlow" cx="20%" cy="80%" r="60%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
   </defs>
 
   <!-- Background -->
   <rect width="1200" height="630" fill="url(#ogBg)"/>
-  <circle cx="200" cy="540" r="380" fill="url(#ogGlow)"/>
+  <circle cx="240" cy="540" r="380" fill="url(#ogGlow)"/>
 
   <!-- Icon, left side -->
   <g transform="translate(96,175)">
-    <rect width="280" height="280" rx="62" ry="62" fill="url(#ogIcon)"/>
-    <path d="M72 147 L121 197 L210 97"
+    <rect width="280" height="280" rx="62" ry="62" fill="#FFFFFF" fill-opacity="0.12"/>
+    <path d="M 56 140
+             C 56 92 116 92 140 140
+             C 164 188 224 188 224 140
+             C 224 92 164 92 140 140
+             C 116 188 56 188 56 140 Z"
+          transform="translate(0,0)"
           fill="none"
           stroke="#FFFFFF"
-          stroke-width="32"
+          stroke-width="28"
           stroke-linecap="round"
           stroke-linejoin="round"/>
   </g>
@@ -40,12 +41,13 @@
           font-size="34"
           font-weight="500"
           letter-spacing="-0.5"
-          fill="#C7D2FE">Close the feedback loop in Messenger.</text>
+          fill="#FFFFFF"
+          fill-opacity="0.92">Close the feedback loop in Messenger.</text>
     <text x="450" y="450"
           font-size="22"
           font-weight="500"
           letter-spacing="0.5"
-          fill="#818CF8"
-          opacity="0.85">FEATUREBASE  ·  INTERCOM CANVAS KIT</text>
+          fill="#FFFFFF"
+          fill-opacity="0.7">FEATUREBASE  ·  INTERCOM CANVAS KIT</text>
   </g>
 </svg>

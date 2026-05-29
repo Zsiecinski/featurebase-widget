@@ -1,15 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Loop">
-  <defs>
-    <linearGradient id="favBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7C3AED"/>
-      <stop offset="100%" stop-color="#4F46E5"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" ry="14" fill="url(#favBg)"/>
-  <path d="M17 34 L28 45 L48 22"
+  <rect width="64" height="64" rx="14" ry="14" fill="#FB7185"/>
+  <path d="M 12 32
+           C 12 22 25 22 32 32
+           C 39 42 52 42 52 32
+           C 52 22 39 22 32 32
+           C 25 42 12 42 12 32 Z"
         fill="none"
         stroke="#FFFFFF"
-        stroke-width="7"
+        stroke-width="6.5"
         stroke-linecap="round"
         stroke-linejoin="round"/>
 </svg>

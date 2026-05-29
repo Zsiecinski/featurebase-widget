@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Loop concept 5 — stacked iterations">
+  <rect width="512" height="512" rx="112" ry="112" fill="#FBBF24"/>
+  <!-- Three rows of increasing length & emphasis, suggesting iterative releases -->
+  <rect x="96" y="160" width="180" height="34" rx="17" fill="#FFFFFF" opacity="0.55"/>
+  <rect x="96" y="239" width="260" height="34" rx="17" fill="#FFFFFF" opacity="0.78"/>
+  <rect x="96" y="318" width="320" height="34" rx="17" fill="#FFFFFF"/>
+</svg>

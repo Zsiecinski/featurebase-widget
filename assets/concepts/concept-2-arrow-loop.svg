@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Loop concept 2 — circular arrow">
+  <rect width="512" height="512" rx="112" ry="112" fill="#10B981"/>
+  <!-- Open circle (three-quarter arc) with arrowhead at the gap -->
+  <path d="M 380 188
+           A 160 160 0 1 1 256 96"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="52"
+        stroke-linecap="round"/>
+  <!-- Arrowhead -->
+  <path d="M 296 64 L 256 96 L 296 152"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="52"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+</svg>
