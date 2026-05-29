@@ -161,20 +161,6 @@ test('homeCanvas: each item gets pill PNG with 60x20 dimensions', () => {
   assert.equal(itemA.image_height, 20);
 });
 
-test('detailCanvas: meta line includes plain type word', () => {
-  const entry = {
-    id: 'x',
-    title: 'Big new thing',
-    url: 'https://x.test',
-    date: iso(2 * day),
-    categories: ['New', 'Kiwi Sizing'],
-    commentCount: 3,
-  };
-  const out = detailCanvas(entry);
-  const meta = comp(out).find((c) => c.id === 'd_meta');
-  assert.match(meta.text, /^NEW · /);
-  assert.match(meta.text, /Kiwi Sizing/);
-});
 
 test('homeCanvas: empty state shows muted message', () => {
   const out = homeCanvas([]);
@@ -211,33 +197,63 @@ test('detailCanvas: not-found state still has Back button', () => {
   assert.equal(out.canvas.stored_data.expanded, 'true');
 });
 
-test('detailCanvas: title + meta + body paragraphs + open-on-Featurebase button', () => {
+test('detailCanvas: pill at top + title + meta (no type word) + divider + body + open button', () => {
   const entry = {
     id: 'x',
     title: 'Big new thing',
     url: 'https://staytuned.featurebase.app/changelog/big-new-thing',
     date: iso(2 * day),
     commentCount: 3,
-    categories: ['Kiwi Sizing'],
+    categories: ['New', 'Kiwi Sizing'],
     markdownContent: '## What changed\n\nThis is paragraph one with **bold** text.\n\nThis is paragraph two with a [link](https://x.test).',
   };
-  const out = detailCanvas(entry);
+  const out = detailCanvas(entry, { baseUrl: 'https://loop.example.com' });
   const c = comp(out);
 
+  // Pill image at the top
+  const pill = c.find((x) => x.id === 'd_pill');
+  assert.ok(pill);
+  assert.equal(pill.type, 'image');
+  assert.equal(pill.url, 'https://loop.example.com/assets/pill-new.png');
+  assert.equal(pill.width, 90);
+  assert.equal(pill.height, 30);
+
   assert.equal(c.find((x) => x.id === 'd_title').text, 'Big new thing');
-  assert.match(c.find((x) => x.id === 'd_meta').text, /Shipped 2 days ago · Kiwi Sizing · 3 comments/);
+  // Meta drops the type word (pill carries it)
+  const meta = c.find((x) => x.id === 'd_meta');
+  assert.doesNotMatch(meta.text, /^NEW/);
+  assert.match(meta.text, /Shipped 2 days ago · Kiwi Sizing · 3 comments/);
+
+  // Divider between meta and body
+  assert.ok(c.find((x) => x.id === 'd_divider'));
 
   // Markdown stripped
-  const bodyTexts = c.filter((x) => x.id?.startsWith('d_body_'));
+  const bodyTexts = c.filter((x) => x.id?.startsWith('d_body_') && x.id !== 'd_body_more');
   assert.ok(bodyTexts.length >= 2, 'expected at least 2 body paragraphs');
-  assert.match(bodyTexts[0].text, /What changed/);
-  // ** stripped, plain text remains
   assert.match(bodyTexts.map((b) => b.text).join(' '), /This is paragraph one with bold text\./);
-  // [link](url) → just text
   assert.match(bodyTexts.map((b) => b.text).join(' '), /with a link\./);
 
   const openBtn = c.find((x) => x.id === 'd_open_full');
   assert.equal(openBtn.action.url, entry.url);
+});
+
+test('detailCanvas: meta hides board name when FEATUREBASE_CATEGORY is set', async () => {
+  process.env.FEATUREBASE_CATEGORY = 'Kiwi';
+  try {
+    const { detailCanvas: dc } = await import(`../src/canvas.js?env=${Date.now()}`);
+    const out = dc({
+      id: 'x',
+      title: 't',
+      url: 'https://x.test',
+      date: iso(0),
+      categories: ['Improved', 'Kiwi Sizing'],
+    });
+    const meta = out.canvas.content.components.find((x) => x.id === 'd_meta');
+    assert.doesNotMatch(meta.text, /Kiwi Sizing/);
+    assert.match(meta.text, /Shipped today/);
+  } finally {
+    delete process.env.FEATUREBASE_CATEGORY;
+  }
 });
 
 test('detailCanvas: includes hero image when featuredImage exists', () => {

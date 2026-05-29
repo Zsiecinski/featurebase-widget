@@ -278,9 +278,13 @@ export function homeCanvas(entries, opts = {}) {
  * @param {object} [opts]
  * @param {boolean} [opts.expanded] - Preserved across Back so home returns
  *                                    to the same state the user came from.
+ * @param {string}  [opts.baseUrl]  - Public URL of this server. Used to build
+ *                                    the absolute URL for the pill badge
+ *                                    image at the top of the detail.
  */
 export function detailCanvas(entry, opts = {}) {
   const expanded = Boolean(opts.expanded);
+  const baseUrl = opts.baseUrl || '';
   if (!entry) return detailNotFoundCanvas({ expanded });
 
   const components = [
@@ -294,6 +298,21 @@ export function detailCanvas(entry, opts = {}) {
     { type: 'spacer', id: 'sp_back', size: 'xs' },
   ];
 
+  // Colored pill badge at the top — same visual language as the home list.
+  const pillUrl = typeBadgeImageUrl(entry, baseUrl);
+  if (pillUrl) {
+    components.push({
+      type: 'image',
+      id: 'd_pill',
+      url: pillUrl,
+      width: 90,
+      height: 30,
+    });
+    components.push({ type: 'spacer', id: 'sp_pill', size: 's' });
+  }
+
+  // Optional featured image hero, only if the entry has one. Most Featurebase
+  // entries don't, so this is rare in practice but keeps the layout flexible.
   const image = extractImage(entry);
   if (image) {
     components.push({
@@ -302,9 +321,8 @@ export function detailCanvas(entry, opts = {}) {
       url: image,
       width: 600,
       height: 300,
-      rounded: false,
     });
-    components.push({ type: 'spacer', id: 'sp_hero', size: 'xs' });
+    components.push({ type: 'spacer', id: 'sp_hero', size: 's' });
   }
 
   components.push({
@@ -314,13 +332,15 @@ export function detailCanvas(entry, opts = {}) {
     style: 'header',
   });
 
+  // Meta line: drop the type word (pill carries it now) and the board name
+  // when a category filter is active (would just repeat for every entry).
   const meta = [];
-  const badge = typeBadge(entry);
-  if (badge) meta.push(badge);
   const when = formatShippedDate(entry.date);
   if (when) meta.push(`Shipped ${when}`);
-  const board = boardCategoryName(entry);
-  if (board) meta.push(board);
+  if (!config.featurebase.category) {
+    const board = boardCategoryName(entry);
+    if (board) meta.push(board);
+  }
   if (typeof entry.commentCount === 'number' && entry.commentCount > 0) {
     meta.push(`${entry.commentCount} ${entry.commentCount === 1 ? 'comment' : 'comments'}`);
   }
@@ -333,13 +353,18 @@ export function detailCanvas(entry, opts = {}) {
     });
   }
 
+  components.push(
+    { type: 'spacer', id: 'sp_meta_div', size: 'xs' },
+    { type: 'divider', id: 'd_divider' },
+    { type: 'spacer', id: 'sp_div_body', size: 'xs' },
+  );
+
   // Body content — prefer markdownContent, fall back to content (stripped of
   // HTML), split into paragraphs, cap total length to avoid a wall of text.
   const raw = entry.markdownContent || entry.content || '';
   const stripped = stripMarkdown(raw);
   const { text, truncated } = truncate(stripped, DETAIL_BODY_CHAR_LIMIT);
   if (text) {
-    components.push({ type: 'spacer', id: 'sp_body', size: 'xs' });
     const paragraphs = text.split(/\n{2,}/).filter(Boolean);
     paragraphs.forEach((p, i) => {
       components.push({
@@ -350,6 +375,7 @@ export function detailCanvas(entry, opts = {}) {
       });
     });
     if (truncated) {
+      components.push({ type: 'spacer', id: 'sp_more', size: 'xs' });
       components.push({
         type: 'text',
         id: 'd_body_more',
@@ -359,7 +385,7 @@ export function detailCanvas(entry, opts = {}) {
     }
   }
 
-  components.push({ type: 'spacer', id: 'sp_d_footer', size: 'xs' });
+  components.push({ type: 'spacer', id: 'sp_d_footer', size: 's' });
 
   if (entry.url) {
     components.push({

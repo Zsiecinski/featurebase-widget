@@ -160,7 +160,7 @@ async function renderCanvas(req, res) {
     if (componentId.startsWith('item_')) {
       const entryId = componentId.slice('item_'.length);
       const entry = await getChangelogById(entryId);
-      return res.send(detailCanvas(entry, { expanded }));
+      return res.send(detailCanvas(entry, { expanded, baseUrl }));
     }
 
     // Otherwise (cold open, see_more/show_less, back_to_home) — home view.
