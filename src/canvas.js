@@ -116,16 +116,15 @@ function entryTitle(entry) {
   return entry.title;
 }
 
-function entrySubtitle(entry, { showBoard } = {}) {
+function entrySubtitle(entry, { showBoard, showComments = true } = {}) {
   const parts = [];
-  // Type word is now visually carried by the pill image; drop it from text.
   if (showBoard) {
     const board = boardCategoryName(entry);
     if (board) parts.push(board);
   }
   const when = formatShippedDate(entry.date);
   if (when) parts.push(`Shipped ${when}`);
-  if (typeof entry.commentCount === 'number' && entry.commentCount > 0) {
+  if (showComments && typeof entry.commentCount === 'number' && entry.commentCount > 0) {
     parts.push(
       `${entry.commentCount} ${entry.commentCount === 1 ? 'comment' : 'comments'}`,
     );
@@ -183,20 +182,29 @@ function truncate(text, limit) {
  * @param {Array} entries
  * @param {object} [opts]
  * @param {boolean} [opts.expanded]      - Show all entries vs. top COLLAPSED_COUNT.
- * @param {string}  [opts.baseUrl]       - Public URL of this server (e.g.
- *   "https://featurebase-widget-production.up.railway.app"). Used to build
- *   absolute image URLs for type badges so Intercom can fetch them.
- * @param {Array}   [opts.inProgress]    - Optional list of in-progress posts.
- *   When non-empty AND opts.showComingNext is true, renders a "Coming next"
- *   section below the shipped list.
- * @param {boolean} [opts.showComingNext] - Per-instance flag from the
- *   teammate's Loop settings (Configure URL flow).
+ * @param {string}  [opts.baseUrl]       - Public URL of this server.
+ * @param {Array}   [opts.inProgress]    - In-progress posts for Coming Next.
+ * @param {boolean} [opts.showComingNext]  Per-instance toggle.
+ * @param {boolean} [opts.showPills]       Per-instance toggle. Default true.
+ * @param {boolean} [opts.showFullRoadmap] Per-instance toggle. Default true.
+ * @param {boolean} [opts.showComments]    Per-instance toggle. Default true.
+ * @param {string}  [opts.headerText]      Override for the main header.
+ * @param {string}  [opts.comingHeaderText] Override for the Coming next title.
+ * @param {string}  [opts.footerLabel]     Override for the footer button.
+ * @param {string}  [opts.footerUrl]       Override for the footer URL.
  */
 export function homeCanvas(entries, opts = {}) {
   const expanded = Boolean(opts.expanded);
   const baseUrl = opts.baseUrl || '';
   const inProgress = opts.inProgress || [];
   const showComingNext = Boolean(opts.showComingNext) && inProgress.length > 0;
+  const showPills = opts.showPills !== false;
+  const showFullRoadmap = opts.showFullRoadmap !== false;
+  const showComments = opts.showComments !== false;
+  const headerText = opts.headerText || 'Recently shipped';
+  const comingHeaderText = opts.comingHeaderText || 'Coming next';
+  const footerLabel = opts.footerLabel || 'See full roadmap';
+  const footerUrl = opts.footerUrl || config.roadmapUrl;
   // Show the board category name (e.g. "Kiwi Sizing") only when no
   // category filter is set — otherwise every row repeats the same value.
   const showBoardName = !config.featurebase.category;
@@ -206,7 +214,7 @@ export function homeCanvas(entries, opts = {}) {
   const hiddenCount = Math.max(total - visible.length, 0);
 
   const components = [
-    { type: 'text', id: 'header', text: 'Recently shipped', style: 'header' },
+    { type: 'text', id: 'header', text: headerText, style: 'header' },
     {
       type: 'text',
       id: 'subhead',
@@ -226,29 +234,30 @@ export function homeCanvas(entries, opts = {}) {
     });
   } else {
     const items = visible.map((e) => {
-      const subtitle = entrySubtitle(e, { showBoard: showBoardName });
+      const subtitle = entrySubtitle(e, { showBoard: showBoardName, showComments });
       const item = {
         type: 'item',
         id: `item_${e.id}`,
         title: entryTitle(e),
         // Submit action replaces the current canvas with the detail view.
-        // Intercom POSTs to /submit with component_id="item_<entryId>" — the
-        // server parses the id and returns detailCanvas(entry).
         action: { type: 'submit' },
       };
       if (subtitle) item.subtitle = subtitle;
 
-      // Pill badge thumbnail in the list item's image slot. image_width /
-      // image_height are required for Canvas Kit to render — without them,
-      // Intercom rejects the canvas with "failed to set up that card."
-      const badgeUrl = typeBadgeImageUrl(e, baseUrl);
-      const featured = extractImage(e);
-      if (badgeUrl) {
-        item.image = badgeUrl;
-        item.image_width = BADGE_IMAGE_WIDTH;
-        item.image_height = BADGE_IMAGE_HEIGHT;
-      } else if (featured) {
-        item.image = featured;
+      // Pill badge thumbnail in the list item's image slot. Skipped entirely
+      // when the teammate disabled pills in Loop settings.
+      if (showPills) {
+        const badgeUrl = typeBadgeImageUrl(e, baseUrl);
+        if (badgeUrl) {
+          item.image = badgeUrl;
+          item.image_width = BADGE_IMAGE_WIDTH;
+          item.image_height = BADGE_IMAGE_HEIGHT;
+        }
+      }
+      // Fall back to entry's own featuredImage when no pill is shown.
+      if (!item.image) {
+        const featured = extractImage(e);
+        if (featured) item.image = featured;
       }
       return item;
     });
@@ -285,7 +294,7 @@ export function homeCanvas(entries, opts = {}) {
       {
         type: 'text',
         id: 'coming_header',
-        text: 'Coming next',
+        text: comingHeaderText,
         style: 'header',
       },
       {
@@ -303,15 +312,17 @@ export function homeCanvas(entries, opts = {}) {
         id: `coming_${p.id}`,
         title: p.title,
         action: { type: 'url', url: p.url },
-        image: `${baseUrl.replace(/\/$/, '')}${IN_PROGRESS_BADGE_IMAGE}`,
-        image_width: BADGE_IMAGE_WIDTH,
-        image_height: BADGE_IMAGE_HEIGHT,
       };
+      if (showPills) {
+        item.image = `${baseUrl.replace(/\/$/, '')}${IN_PROGRESS_BADGE_IMAGE}`;
+        item.image_width = BADGE_IMAGE_WIDTH;
+        item.image_height = BADGE_IMAGE_HEIGHT;
+      }
       const parts = [];
       if (typeof p.upvotes === 'number' && p.upvotes > 0) {
         parts.push(`${p.upvotes} ${p.upvotes === 1 ? 'upvote' : 'upvotes'}`);
       }
-      if (typeof p.commentCount === 'number' && p.commentCount > 0) {
+      if (showComments && typeof p.commentCount === 'number' && p.commentCount > 0) {
         parts.push(`${p.commentCount} ${p.commentCount === 1 ? 'comment' : 'comments'}`);
       }
       if (parts.length > 0) item.subtitle = parts.join(' · ');
@@ -321,16 +332,18 @@ export function homeCanvas(entries, opts = {}) {
   }
   // ────────────────────────────────────────────────────────────────────
 
-  components.push(
-    { type: 'spacer', id: 'sp_footer', size: 'xs' },
-    {
-      type: 'button',
-      id: 'full_roadmap',
-      label: 'See full roadmap',
-      style: 'primary',
-      action: { type: 'url', url: config.roadmapUrl },
-    },
-  );
+  if (showFullRoadmap) {
+    components.push(
+      { type: 'spacer', id: 'sp_footer', size: 'xs' },
+      {
+        type: 'button',
+        id: 'full_roadmap',
+        label: footerLabel,
+        style: 'primary',
+        action: { type: 'url', url: footerUrl },
+      },
+    );
+  }
 
   return {
     canvas: {

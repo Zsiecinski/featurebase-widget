@@ -142,10 +142,21 @@ function readState(req) {
 // Per-instance configuration is stored in card_creation_options. Set by the
 // Configure URL flow when a teammate adds Loop to a Messenger surface,
 // returned to us on every subsequent /initialize call for that instance.
+// Defaults are picked so empty/missing values reproduce current behavior —
+// installers who don't change anything see Loop exactly as it is now.
 function readConfig(req) {
   const opts = req.body?.card_creation_options || {};
   return {
-    showComingNext: opts.show_coming_next === 'true',
+    // Toggles
+    showPills: opts.show_pills !== 'false',                 // default true
+    showComingNext: opts.show_coming_next === 'true',       // default false
+    showFullRoadmap: opts.show_full_roadmap !== 'false',    // default true
+    showComments: opts.show_comments !== 'false',           // default true
+    // Text overrides (empty = use default in canvas builder)
+    headerText: opts.header_text || '',
+    comingHeaderText: opts.coming_header_text || '',
+    footerLabel: opts.footer_label || '',
+    footerUrl: opts.footer_url || '',
   };
 }
 
@@ -166,11 +177,22 @@ async function renderCanvas(req, res) {
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
 
-  // Configure-save click from the configure canvas → persist the choice as
-  // card_creation_options and acknowledge.
+  // Configure-save click from the configure canvas → persist every field as
+  // card_creation_options and acknowledge. Empty text values are stored as
+  // empty strings, which readConfig() interprets as "use the default."
   if (componentId === 'save_config') {
-    const showComingNext = req.body?.input_values?.show_coming_next === 'true';
-    return res.send(configSavedCanvas(showComingNext));
+    const v = req.body?.input_values || {};
+    const saved = {
+      show_pills: v.show_pills === 'false' ? 'false' : 'true',
+      show_coming_next: v.show_coming_next === 'true' ? 'true' : 'false',
+      show_full_roadmap: v.show_full_roadmap === 'false' ? 'false' : 'true',
+      show_comments: v.show_comments === 'false' ? 'false' : 'true',
+      header_text: (v.header_text || '').trim(),
+      coming_header_text: (v.coming_header_text || '').trim(),
+      footer_label: (v.footer_label || '').trim(),
+      footer_url: (v.footer_url || '').trim(),
+    };
+    return res.send(configSavedCanvas(saved));
   }
 
   try {
@@ -194,6 +216,13 @@ async function renderCanvas(req, res) {
         baseUrl,
         inProgress,
         showComingNext: config.showComingNext,
+        showPills: config.showPills,
+        showFullRoadmap: config.showFullRoadmap,
+        showComments: config.showComments,
+        headerText: config.headerText,
+        comingHeaderText: config.comingHeaderText,
+        footerLabel: config.footerLabel,
+        footerUrl: config.footerUrl,
       }),
     );
   } catch (err) {
@@ -207,7 +236,21 @@ async function renderCanvas(req, res) {
 // surface (Messenger Home, etc.). The returned canvas's form values are saved
 // as card_creation_options on Save, and passed back to us on every render.
 // ---------------------------------------------------------------------------
-function configureCanvas(currentShowComingNext = false) {
+// Reusable factory for a Yes/No single-select toggle.
+function toggle(id, label, value, yesText = 'Yes', noText = 'No') {
+  return {
+    type: 'single-select',
+    id,
+    label,
+    value: value ? 'true' : 'false',
+    options: [
+      { type: 'option', id: 'true', text: yesText },
+      { type: 'option', id: 'false', text: noText },
+    ],
+  };
+}
+
+function configureCanvas(current) {
   return {
     canvas: {
       content: {
@@ -216,21 +259,57 @@ function configureCanvas(currentShowComingNext = false) {
           {
             type: 'text',
             id: 'cfg_sub',
-            text: "Configure what's shown in the Recently Shipped card.",
+            text: 'Customize how Loop appears to your users. Leave any field blank to use the default.',
             style: 'muted',
           },
           { type: 'spacer', id: 'cfg_sp1', size: 's' },
-          {
-            type: 'single-select',
-            id: 'show_coming_next',
-            label: "Show 'Coming next' section",
-            value: currentShowComingNext ? 'true' : 'false',
-            options: [
-              { type: 'option', id: 'true', text: 'Yes — show in-progress roadmap items' },
-              { type: 'option', id: 'false', text: 'No — only show recently shipped' },
-            ],
-          },
+          { type: 'divider', id: 'cfg_div1' },
+          { type: 'spacer', id: 'cfg_sp1b', size: 'xs' },
+
+          // ─── Sections ───
+          { type: 'text', id: 'cfg_h_sec', text: 'Sections', style: 'header' },
+          toggle('show_pills', 'Show colored pill badges', current.showPills),
+          toggle('show_coming_next', "Show 'Coming next' section", current.showComingNext,
+            'Yes — show in-progress roadmap items', 'No — only show recently shipped'),
+          toggle('show_full_roadmap', "Show 'See full roadmap' button", current.showFullRoadmap),
+          toggle('show_comments', 'Show comment counts on items', current.showComments),
+
           { type: 'spacer', id: 'cfg_sp2', size: 's' },
+          { type: 'divider', id: 'cfg_div2' },
+          { type: 'spacer', id: 'cfg_sp2b', size: 'xs' },
+
+          // ─── Text overrides ───
+          { type: 'text', id: 'cfg_h_text', text: 'Text', style: 'header' },
+          {
+            type: 'input',
+            id: 'header_text',
+            label: 'Main header (default: Recently shipped)',
+            placeholder: 'Recently shipped',
+            value: current.headerText,
+          },
+          {
+            type: 'input',
+            id: 'coming_header_text',
+            label: "'Coming next' section title (default: Coming next)",
+            placeholder: 'Coming next',
+            value: current.comingHeaderText,
+          },
+          {
+            type: 'input',
+            id: 'footer_label',
+            label: 'Footer button label (default: See full roadmap)',
+            placeholder: 'See full roadmap',
+            value: current.footerLabel,
+          },
+          {
+            type: 'input',
+            id: 'footer_url',
+            label: 'Footer button URL (default: your roadmap URL)',
+            placeholder: 'https://...',
+            value: current.footerUrl,
+          },
+
+          { type: 'spacer', id: 'cfg_sp3', size: 's' },
           {
             type: 'button',
             id: 'save_config',
@@ -244,7 +323,15 @@ function configureCanvas(currentShowComingNext = false) {
   };
 }
 
-function configSavedCanvas(showComingNext) {
+function configSavedCanvas(saved) {
+  // Brief confirmation text summarizing the most notable changes.
+  const summary = [];
+  if (saved.show_coming_next === 'true') summary.push("Coming next section is enabled.");
+  if (saved.show_pills === 'false') summary.push('Pill badges are hidden.');
+  if (saved.show_full_roadmap === 'false') summary.push('Roadmap footer button is hidden.');
+  if (saved.show_comments === 'false') summary.push('Comment counts are hidden.');
+  if (saved.header_text) summary.push(`Header text: "${saved.header_text}".`);
+
   return {
     canvas: {
       content: {
@@ -253,25 +340,23 @@ function configSavedCanvas(showComingNext) {
           {
             type: 'text',
             id: 'cfg_ok_body',
-            text: showComingNext
-              ? "Loop will show the 'Coming next' section to users."
-              : "Loop will show only recently shipped items.",
+            text: summary.length > 0
+              ? summary.join(' ')
+              : 'Loop will render with the default settings.',
             style: 'paragraph',
           },
         ],
       },
     },
-    // Intercom persists this for the lifetime of the card instance.
-    card_creation_options: {
-      show_coming_next: showComingNext ? 'true' : 'false',
-    },
+    // Intercom persists every key here for the lifetime of the card instance,
+    // and passes them back to us in card_creation_options on every render.
+    card_creation_options: saved,
   };
 }
 
 app.post('/configure', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const current = readConfig(req).showComingNext;
-  res.send(configureCanvas(current));
+  res.send(configureCanvas(readConfig(req)));
 });
 
 app.post('/initialize', renderCanvas);
