@@ -139,8 +139,13 @@ function readState(req) {
   return { expanded, componentId };
 }
 
+function baseUrlFor(req) {
+  return `${req.protocol}://${req.get('host')}`;
+}
+
 async function renderCanvas(req, res) {
   const { expanded, componentId } = readState(req);
+  const baseUrl = baseUrlFor(req);
 
   // Tell every intermediary — Intercom's backend cache, any CDN, the browser —
   // never to reuse this response. Canvas Kit responses are personalised and
@@ -160,7 +165,7 @@ async function renderCanvas(req, res) {
 
     // Otherwise (cold open, see_more/show_less, back_to_home) — home view.
     const entries = await getChangelogs();
-    res.send(homeCanvas(entries, { expanded }));
+    res.send(homeCanvas(entries, { expanded, baseUrl }));
   } catch (err) {
     console.error('[loop] failed:', err.message);
     res.send(errorCanvas());

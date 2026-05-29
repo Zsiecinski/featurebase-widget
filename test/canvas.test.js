@@ -111,12 +111,10 @@ test('homeCanvas: stored_data persists expanded as string', () => {
   );
 });
 
-test('homeCanvas: featuredImage attaches as item.image (string + object shapes)', () => {
-  const out = homeCanvas(sampleEntries);
-  const list = comp(out).find((c) => c.type === 'list');
-  assert.equal(list.items.find((i) => i.id === 'item_a').image, 'https://example.com/a.png');
-  assert.equal(list.items.find((i) => i.id === 'item_b').image, undefined);
-});
+// Note: featuredImage is now only used as a fallback when the entry has no
+// type tag (NEW/IMPROVED/FIXED). See "featuredImage is used when entry has
+// no type tag" below for the active path. Items in sampleEntries all have
+// type tags, so their item.image is the badge URL — not featuredImage.
 
 test('typeBadge: extracts NEW / IMPROVED / FIXED in upper case', () => {
   assert.equal(typeBadge({ categories: ['New', 'Kiwi Sizing'] }), 'NEW');
@@ -132,34 +130,52 @@ test('typeBadge: extracts NEW / IMPROVED / FIXED in upper case', () => {
   assert.equal(typeBadge({}), '');
 });
 
-test('homeCanvas: subtitle leads with a colored type badge', () => {
-  const out = homeCanvas(sampleEntries);
+test('homeCanvas: each item gets the correct type-badge PNG as item.image', () => {
+  const out = homeCanvas(sampleEntries, { baseUrl: 'https://loop.example.com' });
   const list = comp(out).find((c) => c.type === 'list');
   const itemA = list.items.find((i) => i.id === 'item_a');
   const itemB = list.items.find((i) => i.id === 'item_b');
   const itemC = list.items.find((i) => i.id === 'item_c');
-  // Each badge is the colored circle followed by the type word.
-  assert.match(itemA.subtitle, /^🟢 NEW · /);
-  assert.match(itemB.subtitle, /^🟣 IMPROVED · /);
-  assert.match(itemC.subtitle, /^🟠 FIXED · /);
+  assert.equal(itemA.image, 'https://loop.example.com/assets/badge-new.png');
+  assert.equal(itemB.image, 'https://loop.example.com/assets/badge-improved.png');
+  assert.equal(itemC.image, 'https://loop.example.com/assets/badge-fixed.png');
+  assert.equal(itemA.rounded_image, true);
 });
 
-test('homeCanvas: subtitle hides board name when category filter is set', async () => {
-  process.env.FEATUREBASE_CATEGORY = 'Kiwi';
-  try {
-    const { homeCanvas: hc } = await import(`../src/canvas.js?env=${Date.now()}`);
-    const out = hc(sampleEntries);
-    const itemA = out.canvas.content.components
-      .find((c) => c.type === 'list')
-      .items.find((i) => i.id === 'item_a');
-    assert.match(itemA.subtitle, /^🟢 NEW · /);
-    assert.doesNotMatch(itemA.subtitle, /Kiwi Sizing/);
-  } finally {
-    delete process.env.FEATUREBASE_CATEGORY;
-  }
+test('homeCanvas: subtitle no longer carries the type word (badge image carries it)', () => {
+  const out = homeCanvas(sampleEntries, { baseUrl: 'https://loop.example.com' });
+  const itemA = comp(out)
+    .find((c) => c.type === 'list')
+    .items.find((i) => i.id === 'item_a');
+  assert.doesNotMatch(itemA.subtitle || '', /NEW|IMPROVED|FIXED/);
+  assert.doesNotMatch(itemA.subtitle || '', /🟢|🟣|🟠/);
 });
 
-test('detailCanvas: meta line leads with a colored type badge', () => {
+test('homeCanvas: badge URL is relative (fallback) when baseUrl is missing', () => {
+  const out = homeCanvas(sampleEntries);
+  const itemA = comp(out)
+    .find((c) => c.type === 'list')
+    .items.find((i) => i.id === 'item_a');
+  assert.equal(itemA.image, '/assets/badge-new.png');
+});
+
+test('homeCanvas: featuredImage is used when entry has no type tag', () => {
+  const out = homeCanvas(
+    [{
+      id: 'no_type',
+      title: 'Generic entry',
+      url: 'https://x.test',
+      featuredImage: 'https://x.test/hero.png',
+      categories: [],
+    }],
+    { baseUrl: 'https://loop.example.com' },
+  );
+  const item = comp(out).find((c) => c.type === 'list').items[0];
+  assert.equal(item.image, 'https://x.test/hero.png');
+  assert.equal(item.rounded_image, false);
+});
+
+test('detailCanvas: meta line includes plain type word (no emoji)', () => {
   const entry = {
     id: 'x',
     title: 'Big new thing',
@@ -170,7 +186,8 @@ test('detailCanvas: meta line leads with a colored type badge', () => {
   };
   const out = detailCanvas(entry);
   const meta = comp(out).find((c) => c.id === 'd_meta');
-  assert.match(meta.text, /^🟢 NEW · /);
+  assert.match(meta.text, /^NEW · /);
+  assert.doesNotMatch(meta.text, /🟢/);
   assert.match(meta.text, /Kiwi Sizing/);
 });
 

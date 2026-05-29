@@ -39,19 +39,18 @@ function extractImage(entry) {
 }
 
 // Featurebase tags each changelog entry with one of three "type" categories
-// alongside its board category. We surface the type as a visible badge so
-// readers can see the New/Improved/Fixed split at a glance, matching
-// Featurebase's public-board styling.
+// alongside its board category. We surface the type as a visible colored
+// badge image on every list item — Canvas Kit text components can't render
+// styled chips, so we render proper PNG badges and use them as item.image
+// (the slot Intercom shows on the left of each list row).
 //
-// Canvas Kit text components can't be styled with custom colors / pills, so
-// we prefix each badge with a colored circle to give it chip-like visual
-// weight. Greens connote additions, purples connote improvements, oranges
-// connote fixes — same metaphor Featurebase uses on its public board.
+// The PNG sources live in assets/ and are served by the express.static
+// /assets handler in src/server.js.
 const TYPE_CATEGORIES = new Set(['new', 'improved', 'fixed']);
-const TYPE_ICONS = {
-  NEW: '🟢',
-  IMPROVED: '🟣',
-  FIXED: '🟠',
+const TYPE_BADGE_IMAGE = {
+  NEW: '/assets/badge-new.png',
+  IMPROVED: '/assets/badge-improved.png',
+  FIXED: '/assets/badge-fixed.png',
 };
 
 function categoryNames(entry) {
@@ -70,12 +69,17 @@ export function typeBadge(entry) {
   return '';
 }
 
-// Badge text with colored-circle prefix. Used for subtitle/meta rendering.
-function typeBadgeWithIcon(entry) {
+/**
+ * Absolute URL for the badge PNG matching this entry's type, or null.
+ * Intercom needs absolute URLs for images; relative ones won't load.
+ */
+function typeBadgeImageUrl(entry, baseUrl) {
   const badge = typeBadge(entry);
-  if (!badge) return '';
-  const icon = TYPE_ICONS[badge];
-  return icon ? `${icon} ${badge}` : badge;
+  if (!badge) return null;
+  const path = TYPE_BADGE_IMAGE[badge];
+  if (!path) return null;
+  if (!baseUrl) return path; // graceful fallback for tests / mock dev
+  return `${baseUrl.replace(/\/$/, '')}${path}`;
 }
 
 function boardCategoryName(entry) {
@@ -85,8 +89,7 @@ function boardCategoryName(entry) {
 
 function entrySubtitle(entry, { showBoard } = {}) {
   const parts = [];
-  const badge = typeBadgeWithIcon(entry);
-  if (badge) parts.push(badge);
+  // Type badge is now carried by item.image, so drop it from the subtitle.
   if (showBoard) {
     const board = boardCategoryName(entry);
     if (board) parts.push(board);
@@ -137,9 +140,13 @@ function truncate(text, limit) {
  * @param {Array} entries
  * @param {object} [opts]
  * @param {boolean} [opts.expanded]  - Show all entries vs. top COLLAPSED_COUNT.
+ * @param {string}  [opts.baseUrl]   - Public URL of this server (e.g.
+ *   "https://featurebase-widget-production.up.railway.app"). Used to build
+ *   absolute image URLs for type badges so Intercom can fetch them.
  */
 export function homeCanvas(entries, opts = {}) {
   const expanded = Boolean(opts.expanded);
+  const baseUrl = opts.baseUrl || '';
   // Show the board category name (e.g. "Kiwi Sizing") only when no
   // category filter is set — otherwise every row repeats the same value.
   const showBoardName = !config.featurebase.category;
@@ -170,20 +177,28 @@ export function homeCanvas(entries, opts = {}) {
   } else {
     const items = visible.map((e) => {
       const subtitle = entrySubtitle(e, { showBoard: showBoardName });
-      const image = extractImage(e);
       const item = {
         type: 'item',
         id: `item_${e.id}`,
         title: e.title,
         // Submit action replaces the current canvas with the detail view.
         // Intercom POSTs to /submit with component_id="item_<entryId>" — the
-        // server parses the id and returns detailCanvas(entry). Stays in
-        // Messenger, no iframe / no new tab.
+        // server parses the id and returns detailCanvas(entry).
         action: { type: 'submit' },
       };
       if (subtitle) item.subtitle = subtitle;
-      if (image) {
-        item.image = image;
+
+      // Image priority: type badge (visual chip carrying the NEW/IMPROVED/
+      // FIXED metadata) wins over the entry's featuredImage. Most Featurebase
+      // entries don't set a featuredImage anyway, so this trade-off costs us
+      // very little and gives the list a uniform, scannable visual rhythm.
+      const badgeUrl = typeBadgeImageUrl(e, baseUrl);
+      const featured = extractImage(e);
+      if (badgeUrl) {
+        item.image = badgeUrl;
+        item.rounded_image = true;
+      } else if (featured) {
+        item.image = featured;
         item.rounded_image = false;
       }
       return item;
@@ -276,7 +291,7 @@ export function detailCanvas(entry, opts = {}) {
   });
 
   const meta = [];
-  const badge = typeBadgeWithIcon(entry);
+  const badge = typeBadge(entry);
   if (badge) meta.push(badge);
   const when = formatShippedDate(entry.date);
   if (when) meta.push(`Shipped ${when}`);

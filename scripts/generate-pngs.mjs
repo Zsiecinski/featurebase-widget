@@ -18,6 +18,9 @@ const assets = join(here, '..', 'assets');
 
 const logoSvg = await readFile(join(assets, 'logo.svg'));
 const ogSvg = await readFile(join(assets, 'og.svg'));
+const badgeNewSvg = await readFile(join(assets, 'badge-new.svg'));
+const badgeImprovedSvg = await readFile(join(assets, 'badge-improved.svg'));
+const badgeFixedSvg = await readFile(join(assets, 'badge-fixed.svg'));
 
 const renders = [
   { svg: logoSvg, size: 192, name: 'logo-192.png' },
@@ -25,6 +28,11 @@ const renders = [
   { svg: logoSvg, size: 512, name: 'logo-512.png' },
   { svg: logoSvg, size: 180, name: 'apple-touch-icon.png' },
   { svg: ogSvg, width: 1200, height: 630, name: 'og.png' },
+  // Canvas Kit list item badges — rendered at 96x96 for crisp display at
+  // the avatar size Intercom uses (~24-32px).
+  { svg: badgeNewSvg, size: 96, name: 'badge-new.png' },
+  { svg: badgeImprovedSvg, size: 96, name: 'badge-improved.png' },
+  { svg: badgeFixedSvg, size: 96, name: 'badge-fixed.png' },
 ];
 
 for (const r of renders) {
