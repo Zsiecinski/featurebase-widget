@@ -132,16 +132,16 @@ test('typeBadge: extracts NEW / IMPROVED / FIXED in upper case', () => {
   assert.equal(typeBadge({}), '');
 });
 
-test('homeCanvas: each item subtitle leads with its type badge', () => {
+test('homeCanvas: subtitle leads with a colored type badge', () => {
   const out = homeCanvas(sampleEntries);
   const list = comp(out).find((c) => c.type === 'list');
   const itemA = list.items.find((i) => i.id === 'item_a');
   const itemB = list.items.find((i) => i.id === 'item_b');
   const itemC = list.items.find((i) => i.id === 'item_c');
-  // Badge prefixes the subtitle. Board name follows since no category filter.
-  assert.match(itemA.subtitle, /^NEW · /);
-  assert.match(itemB.subtitle, /^IMPROVED · /);
-  assert.match(itemC.subtitle, /^FIXED · /);
+  // Each badge is the colored circle followed by the type word.
+  assert.match(itemA.subtitle, /^🟢 NEW · /);
+  assert.match(itemB.subtitle, /^🟣 IMPROVED · /);
+  assert.match(itemC.subtitle, /^🟠 FIXED · /);
 });
 
 test('homeCanvas: subtitle hides board name when category filter is set', async () => {
@@ -152,15 +152,14 @@ test('homeCanvas: subtitle hides board name when category filter is set', async 
     const itemA = out.canvas.content.components
       .find((c) => c.type === 'list')
       .items.find((i) => i.id === 'item_a');
-    // Type badge still present, board name gone
-    assert.match(itemA.subtitle, /^NEW · /);
+    assert.match(itemA.subtitle, /^🟢 NEW · /);
     assert.doesNotMatch(itemA.subtitle, /Kiwi Sizing/);
   } finally {
     delete process.env.FEATUREBASE_CATEGORY;
   }
 });
 
-test('detailCanvas: meta line leads with type badge', () => {
+test('detailCanvas: meta line leads with a colored type badge', () => {
   const entry = {
     id: 'x',
     title: 'Big new thing',
@@ -171,7 +170,7 @@ test('detailCanvas: meta line leads with type badge', () => {
   };
   const out = detailCanvas(entry);
   const meta = comp(out).find((c) => c.id === 'd_meta');
-  assert.match(meta.text, /^NEW · /);
+  assert.match(meta.text, /^🟢 NEW · /);
   assert.match(meta.text, /Kiwi Sizing/);
 });
 

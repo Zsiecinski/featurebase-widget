@@ -42,7 +42,17 @@ function extractImage(entry) {
 // alongside its board category. We surface the type as a visible badge so
 // readers can see the New/Improved/Fixed split at a glance, matching
 // Featurebase's public-board styling.
+//
+// Canvas Kit text components can't be styled with custom colors / pills, so
+// we prefix each badge with a colored circle to give it chip-like visual
+// weight. Greens connote additions, purples connote improvements, oranges
+// connote fixes — same metaphor Featurebase uses on its public board.
 const TYPE_CATEGORIES = new Set(['new', 'improved', 'fixed']);
+const TYPE_ICONS = {
+  NEW: '🟢',
+  IMPROVED: '🟣',
+  FIXED: '🟠',
+};
 
 function categoryNames(entry) {
   return (entry.categories || []).map((c) =>
@@ -60,6 +70,14 @@ export function typeBadge(entry) {
   return '';
 }
 
+// Badge text with colored-circle prefix. Used for subtitle/meta rendering.
+function typeBadgeWithIcon(entry) {
+  const badge = typeBadge(entry);
+  if (!badge) return '';
+  const icon = TYPE_ICONS[badge];
+  return icon ? `${icon} ${badge}` : badge;
+}
+
 function boardCategoryName(entry) {
   const names = categoryNames(entry);
   return names.find((name) => !TYPE_CATEGORIES.has(name.toLowerCase())) || '';
@@ -67,7 +85,7 @@ function boardCategoryName(entry) {
 
 function entrySubtitle(entry, { showBoard } = {}) {
   const parts = [];
-  const badge = typeBadge(entry);
+  const badge = typeBadgeWithIcon(entry);
   if (badge) parts.push(badge);
   if (showBoard) {
     const board = boardCategoryName(entry);
@@ -258,7 +276,7 @@ export function detailCanvas(entry, opts = {}) {
   });
 
   const meta = [];
-  const badge = typeBadge(entry);
+  const badge = typeBadgeWithIcon(entry);
   if (badge) meta.push(badge);
   const when = formatShippedDate(entry.date);
   if (when) meta.push(`Shipped ${when}`);
