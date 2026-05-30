@@ -4,7 +4,7 @@
 > current architecture, what's done, what's pending, and where every
 > piece lives. If a new Claude session picks this up, read this first.
 
-Last updated: 2026-05-30 — after Phase 4 (multi-tenant scaffold) + marketing site.
+Last updated: 2026-05-30 — after Phase 6 ops infrastructure + CI + docs + marketing mockups.
 
 ---
 
@@ -212,16 +212,32 @@ support escalation flow.
 - [ ] Update Intercom URLs to bump cache (every Railway deploy: bump
   `?v=N+1` in Initialize/Submit/Configure URLs)
 
+### Done since the initial Phase 4 snapshot
+
+- [x] Sentry integration (`src/observability.js`, env-var gated by `SENTRY_DSN`)
+- [x] Per-workspace rate limiting (`src/rate-limit.js`, 120 req/min default)
+- [x] `/admin/tenants/:workspace_id` support endpoint (`src/admin-routes.js`,
+  behind `ADMIN_TOKEN`)
+- [x] Error handler middleware mounted last
+- [x] Website synced to both branches
+- [x] PROJECT_STATE.md created on both branches
+- [x] CI workflow (`.github/workflows/ci.yml`) running tests + PNG-up-to-date
+  check on push and PR for both branches
+- [x] `/website/docs.html` — full installer-facing docs page with sidebar nav
+- [x] `/website/mockups.html` — branded mockups for App Store screenshots
+- [x] Root README rewritten with full endpoint reference + branch architecture
+- [x] Integration tests for marketing site routes (9 tests covering all
+  static routes, 404s, content-type assertions)
+
 ### Can do without user (will continue in subsequent sessions)
 
-- [ ] Sentry integration (env-var gated by `SENTRY_DSN`)
-- [ ] Per-workspace rate limiting middleware
-- [ ] `/admin/tenants` support endpoint behind admin token
-- [ ] More integration tests (mocked DB, OAuth flow)
-- [ ] Docs section / page added to website
-- [ ] CI: GitHub Actions running tests on push
-- [ ] Sync website to multi-tenant branch (currently only on main)
-- [ ] Update root README to reflect current state
+- [ ] More integration tests (mocked DB for multi-tenant paths, OAuth flow)
+- [ ] `listTenants()` for `/admin/tenants` (currently single-lookup only)
+- [ ] Per-tenant background job (re-validate FB keys nightly, mark expired)
+- [ ] Marketing site additions: testimonials section (with placeholder copy),
+  comparison-with-changelog-only-tools section
+- [ ] Status page / uptime monitor public URL
+- [ ] CHANGELOG.md for the public version's own changelog (meta)
 
 ---
 
