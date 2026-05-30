@@ -593,6 +593,18 @@ app.get('/debug/changelogs', async (req, res) => {
   }
 });
 
+// 404 handler — branded HTML page for browser visits, JSON for API requests.
+// Mounted after all route handlers but before the error handler.
+app.use((req, res, next) => {
+  if (res.headersSent) return next();
+  const wantsHtml = req.accepts(['json', 'html']) === 'html';
+  if (wantsHtml) {
+    res.status(404).sendFile(path.join(websiteDir, '404.html'));
+  } else {
+    res.status(404).json({ error: 'not found', path: req.path });
+  }
+});
+
 // Last-resort error handler — catches any unhandled exception thrown by
 // route handlers, logs it to Sentry (if configured) + console, and returns
 // 500 to the caller. Must be registered AFTER all routes.

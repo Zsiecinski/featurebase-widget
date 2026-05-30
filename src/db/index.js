@@ -195,6 +195,37 @@ export async function listTenants({ limit = 50, offset = 0, includeUninstalled =
   }));
 }
 
+/**
+ * Recent tenant_events for support / ops visibility. Useful for spotting
+ * a spike in fb_auth_failed events or unusual install rates.
+ */
+export async function recentEvents({ limit = 100, tenantId = null } = {}) {
+  const s = init();
+  if (!s) return [];
+  const max = Math.min(Math.max(Number(limit) || 100, 1), 500);
+  const rows = tenantId
+    ? await s`
+        SELECT id, tenant_id, event, metadata, created_at
+        FROM tenant_events
+        WHERE tenant_id = ${tenantId}
+        ORDER BY id DESC
+        LIMIT ${max}
+      `
+    : await s`
+        SELECT id, tenant_id, event, metadata, created_at
+        FROM tenant_events
+        ORDER BY id DESC
+        LIMIT ${max}
+      `;
+  return rows.map((r) => ({
+    id: r.id,
+    tenantId: r.tenant_id,
+    event: r.event,
+    metadata: r.metadata,
+    at: r.created_at,
+  }));
+}
+
 export async function close() {
   if (sql) await sql.end({ timeout: 5 });
   sql = null;

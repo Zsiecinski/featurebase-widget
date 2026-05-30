@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lost in the loop — Loop</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/website/styles.css">
+  <style>
+    .not-found {
+      max-width: 540px;
+      margin: 120px auto 80px;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .not-found__big {
+      font-size: 8rem;
+      font-weight: 700;
+      letter-spacing: -0.08em;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--coral-500), var(--coral-300));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 16px;
+    }
+    .not-found h1 {
+      font-size: 1.875rem;
+      letter-spacing: -0.025em;
+      margin-bottom: 16px;
+    }
+    .not-found p {
+      color: var(--muted);
+      font-size: 1.05rem;
+      margin-bottom: 32px;
+    }
+    .not-found__actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .not-found__infinity {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 28px;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a href="/" class="brand">
+        <img src="/assets/logo.svg" alt="Loop">
+        Loop
+      </a>
+      <nav class="site-nav">
+        <a href="/#features">Features</a>
+        <a href="/website/docs.html">Docs</a>
+        <a class="btn btn-primary" href="https://www.intercom.com/app-store">Install on Intercom</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="not-found">
+    <img src="/assets/logo.svg" alt="" class="not-found__infinity">
+    <div class="not-found__big">404</div>
+    <h1>Lost in the loop.</h1>
+    <p>The page you're looking for isn't here. It might have moved, or you might have typed the URL by hand. Either way — there are easier ways to find what you need.</p>
+    <div class="not-found__actions">
+      <a class="btn btn-primary" href="/">← Back to home</a>
+      <a class="btn btn-secondary" href="/website/docs.html">Read the docs</a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <div>© <span id="year">2026</span> Loop. All rights reserved.</div>
+        <div><a href="/website/terms.html">Terms</a> · <a href="/website/privacy.html">Privacy</a> · <a href="/website/docs.html">Docs</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>

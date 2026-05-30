@@ -11,7 +11,12 @@
 // their workspace, see when they installed, whether Featurebase was
 // configured, when they last used it. Faster than asking them for screenshots.
 
-import { findTenantByWorkspace, listTenants, dbAvailable } from './db/index.js';
+import {
+  findTenantByWorkspace,
+  listTenants,
+  recentEvents,
+  dbAvailable,
+} from './db/index.js';
 
 function requireAdminToken(req, res, next) {
   const required = process.env.ADMIN_TOKEN;
@@ -36,6 +41,14 @@ export function registerAdminRoutes(app) {
       limit,
       offset,
     });
+  });
+
+  app.get('/admin/events', requireAdminToken, async (req, res) => {
+    if (!dbAvailable()) return res.json({ events: [] });
+    const limit = Number(req.query.limit) || 100;
+    const tenantId = req.query.tenant_id ? Number(req.query.tenant_id) : null;
+    const events = await recentEvents({ limit, tenantId });
+    res.json({ events, count: events.length });
   });
 
   app.get('/admin/tenants/:workspaceId', requireAdminToken, async (req, res) => {
