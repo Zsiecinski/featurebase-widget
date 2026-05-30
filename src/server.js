@@ -10,7 +10,12 @@ import {
 } from './featurebase.js';
 import { homeCanvas, detailCanvas, errorCanvas, needsSetupCanvas } from './canvas.js';
 import { registerAuthRoutes } from './auth-routes.js';
+import { registerAdminRoutes } from './admin-routes.js';
 import { isMultiTenantEnabled, verifyCanvasKitSignature } from './intercom.js';
+import { workspaceRateLimit } from './rate-limit.js';
+import { initSentry, errorHandler } from './observability.js';
+
+await initSentry();
 import {
   dbAvailable,
   findTenantByWorkspace,
@@ -62,6 +67,7 @@ app.get('/health', (_req, res) => {
 // OAuth install flow for the multi-tenant App Store build. No-op when
 // INTERCOM_CLIENT_ID is unset (single-tenant deploys).
 registerAuthRoutes(app);
+registerAdminRoutes(app);
 
 app.get('/favicon.svg', (_req, res) =>
   res.sendFile(path.join(assetsDir, 'favicon.svg')),
@@ -501,8 +507,10 @@ app.post('/configure', verifyCanvasKitSignature, async (req, res) => {
 // Signature middleware short-circuits to next() in single-tenant deploys
 // (INTERCOM_CLIENT_SECRET unset). In multi-tenant production it rejects any
 // request not signed with our app's client secret.
-app.post('/initialize', verifyCanvasKitSignature, renderCanvas);
-app.post('/submit', verifyCanvasKitSignature, renderCanvas);
+// Rate limiter runs after signature so we don't count rejected unauthenticated
+// requests against any tenant's quota.
+app.post('/initialize', verifyCanvasKitSignature, workspaceRateLimit, renderCanvas);
+app.post('/submit', verifyCanvasKitSignature, workspaceRateLimit, renderCanvas);
 
 // Backward-compat fallback. An earlier Loop version used sheet actions
 // pointing at /sheet/:id. Intercom's Messenger caches canvases per session,
@@ -584,6 +592,11 @@ app.get('/debug/changelogs', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Last-resort error handler — catches any unhandled exception thrown by
+// route handlers, logs it to Sentry (if configured) + console, and returns
+// 500 to the caller. Must be registered AFTER all routes.
+app.use(errorHandler);
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {
