@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Loop</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/website/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a href="/" class="brand">
+        <img src="/assets/logo.svg" alt="Loop">
+        Loop
+      </a>
+      <nav class="site-nav">
+        <a href="/#features">Features</a>
+        <a href="/#pricing">Pricing</a>
+        <a class="btn btn-primary" href="https://www.intercom.com/app-store">Install on Intercom</a>
+      </nav>
+    </div>
+  </header>
+
+  <article class="article">
+    <h1>Privacy Policy</h1>
+    <p class="meta">Last updated: <strong>[REPLACE BEFORE PUBLISHING]</strong></p>
+
+    <p>This Privacy Policy describes how Loop ("we", "our", "us") collects, uses, and discloses information when you use our Intercom Canvas Kit app (the "Service"). By installing or using Loop, you agree to the practices described here.</p>
+
+    <p><em>Before publishing this page, the operator should replace placeholders with their company name, contact email, jurisdiction, and effective date. This is a starting template — not a substitute for legal review in your jurisdiction.</em></p>
+
+    <h2>1. Information we collect</h2>
+
+    <h3>From your Intercom workspace</h3>
+    <p>When you install Loop, Intercom shares the following with us via OAuth:</p>
+    <ul>
+      <li>Your Intercom workspace ID</li>
+      <li>An OAuth access token (used to identify the workspace on subsequent requests)</li>
+      <li>The installing admin's name and email (used for support contact only)</li>
+    </ul>
+
+    <h3>From your configuration</h3>
+    <p>When you configure Loop, you provide:</p>
+    <ul>
+      <li>Your Featurebase API key, encrypted at rest with AES-256-GCM</li>
+      <li>Optional category filter (free text)</li>
+      <li>Display preferences (toggles, counts, labels) saved as plain text</li>
+    </ul>
+
+    <h3>From your customers — none</h3>
+    <p><strong>Loop does not read, store, or process any messages, contacts, or profile data from your Intercom Messenger.</strong> When a customer opens Loop's Canvas Kit card, we receive only metadata required by the Canvas Kit protocol (the request workspace ID, the component the user interacted with) to render the response. We do not log customer identities or message content.</p>
+
+    <h3>Automatically collected</h3>
+    <p>Standard server logs: HTTP request method, path, timestamp, status code, response time, errors and stack traces (without personal data). Retained for 30 days for debugging and abuse prevention, then deleted.</p>
+
+    <h2>2. How we use information</h2>
+    <p>We use the information collected to:</p>
+    <ul>
+      <li>Render Loop's Canvas Kit responses (the core functionality)</li>
+      <li>Authenticate Canvas Kit requests via HMAC signature verification</li>
+      <li>Respond to support requests</li>
+      <li>Investigate and prevent abuse, fraud, or security incidents</li>
+      <li>Comply with legal obligations</li>
+    </ul>
+
+    <p>We do <strong>not</strong>:</p>
+    <ul>
+      <li>Sell your data</li>
+      <li>Share your data with advertisers</li>
+      <li>Use your data to train AI/ML models</li>
+      <li>Read your customers' Messenger conversations</li>
+    </ul>
+
+    <h2>3. Third parties</h2>
+    <p>Loop integrates with the following services on your behalf:</p>
+    <ul>
+      <li><strong>Intercom</strong> — to receive Canvas Kit requests and respond. <a href="https://www.intercom.com/legal/privacy">Intercom's privacy policy</a>.</li>
+      <li><strong>Featurebase</strong> — to fetch your changelog and roadmap data using your API key. <a href="https://www.featurebase.app/privacy">Featurebase's privacy policy</a>.</li>
+    </ul>
+    <p>Loop is hosted on Railway. Our database is hosted on Railway Postgres.</p>
+
+    <h2>4. Data retention and deletion</h2>
+    <ul>
+      <li>Configuration and OAuth tokens are retained while Loop is installed in your workspace, plus 90 days after uninstall to allow easy reinstallation.</li>
+      <li>Server logs are retained for 30 days.</li>
+      <li>You may request immediate deletion of all your data by emailing <a href="mailto:support@loop-app.example">support@loop-app.example</a>. We will confirm deletion within 7 days.</li>
+    </ul>
+
+    <h2>5. Security</h2>
+    <ul>
+      <li>Featurebase API keys are encrypted at rest using AES-256-GCM with keys managed outside the database.</li>
+      <li>All data in transit is encrypted via TLS.</li>
+      <li>Webhook requests from Intercom are verified via HMAC-SHA256 signature before processing.</li>
+    </ul>
+
+    <h2>6. Your rights</h2>
+    <p>Depending on your location, you may have rights to access, correct, delete, restrict, or port your data, or withdraw consent. Email <a href="mailto:support@loop-app.example">support@loop-app.example</a> to exercise these rights. We respond within 30 days.</p>
+
+    <h2>7. International transfers</h2>
+    <p>Loop is operated from <strong>[YOUR JURISDICTION]</strong>. If you access Loop from outside that region, your data may be transferred there. We rely on standard contractual clauses or equivalent safeguards where required.</p>
+
+    <h2>8. Children's privacy</h2>
+    <p>Loop is not directed at children under 16 and does not knowingly collect personal information from children. If we learn we have collected such information, we will delete it.</p>
+
+    <h2>9. Changes to this policy</h2>
+    <p>We may update this policy from time to time. Material changes will be notified via email to the installing admin or a banner in the Configure screen. Continued use of Loop after changes constitutes acceptance.</p>
+
+    <h2>10. Contact</h2>
+    <p>For questions about this policy or to exercise your rights, email <a href="mailto:support@loop-app.example">support@loop-app.example</a>.</p>
+
+    <p style="margin-top: 48px;"><a href="/">← Back to home</a></p>
+  </article>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <div>© <span id="year">2026</span> Loop. All rights reserved.</div>
+        <div><a href="/website/terms.html">Terms</a> · <a href="/website/privacy.html">Privacy</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>
