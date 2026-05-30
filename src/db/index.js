@@ -151,6 +151,50 @@ export async function markUninstalled(workspaceId) {
   `;
 }
 
+/**
+ * Light list of tenants for support / admin views. Excludes plaintext FB
+ * keys — only returns whether each tenant is configured. Capped + offset
+ * for safety in case the table grows large.
+ */
+export async function listTenants({ limit = 50, offset = 0, includeUninstalled = false } = {}) {
+  const s = init();
+  if (!s) return [];
+  const max = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const off = Math.max(Number(offset) || 0, 0);
+  const rows = includeUninstalled
+    ? await s`
+        SELECT id, intercom_workspace_id, intercom_admin_email,
+               featurebase_org, featurebase_category, featurebase_api_key_enc,
+               configured_at, last_used_at, installed_at, uninstalled_at
+        FROM tenants
+        ORDER BY id DESC
+        LIMIT ${max} OFFSET ${off}
+      `
+    : await s`
+        SELECT id, intercom_workspace_id, intercom_admin_email,
+               featurebase_org, featurebase_category, featurebase_api_key_enc,
+               configured_at, last_used_at, installed_at
+        FROM tenants
+        WHERE uninstalled_at IS NULL
+        ORDER BY id DESC
+        LIMIT ${max} OFFSET ${off}
+      `;
+  return rows.map((r) => ({
+    id: r.id,
+    workspaceId: r.intercom_workspace_id,
+    email: r.intercom_admin_email,
+    featurebase: {
+      org: r.featurebase_org,
+      category: r.featurebase_category,
+      apiKeySet: Boolean(r.featurebase_api_key_enc),
+    },
+    installedAt: r.installed_at,
+    configuredAt: r.configured_at,
+    lastUsedAt: r.last_used_at,
+    uninstalledAt: r.uninstalled_at || null,
+  }));
+}
+
 export async function close() {
   if (sql) await sql.end({ timeout: 5 });
   sql = null;

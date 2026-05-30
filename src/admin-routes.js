@@ -11,7 +11,7 @@
 // their workspace, see when they installed, whether Featurebase was
 // configured, when they last used it. Faster than asking them for screenshots.
 
-import { findTenantByWorkspace, dbAvailable } from './db/index.js';
+import { findTenantByWorkspace, listTenants, dbAvailable } from './db/index.js';
 
 function requireAdminToken(req, res, next) {
   const required = process.env.ADMIN_TOKEN;
@@ -24,14 +24,17 @@ function requireAdminToken(req, res, next) {
 }
 
 export function registerAdminRoutes(app) {
-  app.get('/admin/tenants', requireAdminToken, async (_req, res) => {
+  app.get('/admin/tenants', requireAdminToken, async (req, res) => {
     if (!dbAvailable()) return res.json({ tenants: [], note: 'DB not configured' });
-    // The findTenantByWorkspace function isn't a list endpoint — we'd add
-    // listTenants() to db/index.js if this gets used heavily. For now,
-    // return a placeholder noting that single-tenant lookup is by ID.
+    const limit = Number(req.query.limit) || 50;
+    const offset = Number(req.query.offset) || 0;
+    const includeUninstalled = req.query.uninstalled === 'true';
+    const tenants = await listTenants({ limit, offset, includeUninstalled });
     res.json({
-      tenants: [],
-      note: 'Add listTenants() to src/db/index.js for full listing. Use /admin/tenants/:workspace_id for individual lookups.',
+      tenants,
+      count: tenants.length,
+      limit,
+      offset,
     });
   });
 
