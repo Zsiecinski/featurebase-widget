@@ -4,48 +4,149 @@
 
 <p align="center">
   <strong>Close the feedback loop in Messenger.</strong><br>
-  Intercom Canvas Kit app that surfaces your Featurebase <em>Done</em> roadmap column inside the Intercom chat widget.
+  Intercom Canvas Kit app that surfaces your Featurebase changelog and roadmap inside the Messenger your customers already use.
 </p>
 
 <p align="center">
   <img src="assets/og.png" alt="Loop — Featurebase roadmap for Intercom" width="600">
 </p>
 
+<p align="center">
+  <a href="https://github.com/Zsiecinski/featurebase-widget/actions/workflows/ci.yml"><img src="https://github.com/Zsiecinski/featurebase-widget/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="#license">License</a>
+</p>
+
 ---
+
+## ⚡ Resume-here for new sessions
+
+**Read [`PROJECT_STATE.md`](./PROJECT_STATE.md) first.** It's the canonical
+status file: branch architecture, what's done, what's pending, key
+decisions, gotchas, and how to resume.
 
 ## What it does
 
-Surfaces the **Done** column of the Staytuned Featurebase roadmap
-(`/roadmap/kiwi-sizing`) inside the Intercom Messenger as a Canvas Kit card.
+Loop is an Intercom Canvas Kit app rendered in the Messenger Home (and
+optionally other Canvas Kit surfaces). It pulls live data from your
+Featurebase API and renders two sections:
 
-- `POST /initialize` – rendered when a user opens the app in Messenger.
-- `POST /submit`     – Intercom requires this even when the app has no form.
-- `GET /health`      – `{ ok, mock, uptime }` for uptime checks / Railway health.
-- `GET /`            – plain-text liveness string.
+- **Recently shipped** — your Featurebase changelog (customer-facing
+  entries with `state: live`), with colored type pills (NEW / IMPROVED /
+  FIXED), an optional drill-down detail view, and a "See full roadmap"
+  CTA.
+- **Coming next** (optional) — in-progress roadmap items with a
+  blue "IN PROGRESS" pill and upvote count. Surfaces the work-in-flight
+  to customers so they anticipate what's coming.
 
-Read-only for now. No DB, no submit form.
+Loop respects Featurebase's `hideFromBoardAndWidgets` flag so your
+public board and Loop stay in sync visibility-wise.
 
-## Quick start
+## Architecture
+
+Two deploys, one codebase. The same code runs both modes — what
+differs is which env vars are set.
+
+| | Single-tenant (`main`) | Multi-tenant (`multi-tenant`) |
+|---|---|---|
+| Purpose | Staytuned-internal Loop | Public App Store version |
+| Featurebase credentials | Env var | Per-tenant in Postgres (AES-256-GCM encrypted) |
+| Workspace identity | None (one workspace) | Intercom OAuth |
+| Signature verification | Off (no `INTERCOM_CLIENT_SECRET`) | Enforced |
+| `/auth/*` endpoints | Inactive | Active |
+| `/admin/*` endpoints | Inactive (no `ADMIN_TOKEN`) | Active when token set |
+| Tests | 35 | 48 |
+
+All multi-tenant code paths are env-var gated. A `main` deploy with
+no `DATABASE_URL` or `INTERCOM_CLIENT_*` set runs in pure single-tenant
+mode. **Merging `multi-tenant` → `main` will not break a single-tenant
+deploy** as long as you don't add those env vars.
+
+## Endpoints
+
+### Public surface
+
+| Path | Method | Purpose |
+|---|---|---|
+| `/` | GET | Marketing landing page (`website/index.html`) |
+| `/website/*` | GET | Static marketing site (docs, privacy, terms, styles) |
+| `/assets/*` | GET | Brand assets (logos, pills, OG image) |
+| `/health` | GET | `{ ok, mock, uptime, multi_tenant, db }` |
+
+### Canvas Kit (called by Intercom)
+
+| Path | Method | Purpose |
+|---|---|---|
+| `/initialize` | POST | Cold-open render |
+| `/submit` | POST | Re-render on user tap (drill-down, expand, back) |
+| `/configure` | POST | Render or save the Loop settings form |
+| `/sheet/:id` | POST | Backward-compat redirect for stale cached canvases |
+
+### Multi-tenant only
+
+| Path | Method | Purpose |
+|---|---|---|
+| `/auth/install` | GET | Redirect installer to Intercom OAuth |
+| `/auth/callback` | GET | OAuth code → token exchange, persist tenant |
+| `/auth/uninstall` | POST | Intercom webhook for uninstalls |
+| `/auth/data` | DELETE | GDPR right-to-erasure |
+| `/admin/tenants/:workspace_id` | GET | Support tenant lookup (gated by `ADMIN_TOKEN`) |
+
+### Debug
+
+| Path | Method | Purpose |
+|---|---|---|
+| `/debug/changelogs` | GET | Raw Featurebase response with diagnostic fields (gated by `DEBUG_TOKEN`) |
+
+## Local development
 
 ```bash
-cd "D:/FeatureBase - Widget"
+git clone https://github.com/Zsiecinski/featurebase-widget.git
+cd featurebase-widget
 npm install
 cp .env.example .env
-# Leave FEATUREBASE_API_KEY blank to run in MOCK mode.
 npm run dev
 ```
 
-Open <http://localhost:3000/> – you should see `Kiwi Done app is running (MOCK mode).`
+Loop boots in **MOCK mode** when `FEATUREBASE_API_KEY` is unset, so
+you can develop and test without a real Featurebase org.
 
-Hit the Canvas endpoint:
+Open <http://localhost:3000/> for the marketing site, <http://localhost:3000/health> for the status JSON.
+
+Hit the Canvas Kit endpoint to see what Intercom would see:
 
 ```bash
-curl -X POST http://localhost:3000/initialize
+curl -X POST http://localhost:3000/initialize | jq .
 ```
 
-You'll get a Canvas JSON object with three mocked "shipped" posts. When your
-real `FEATUREBASE_API_KEY` arrives, drop it in `.env` and restart — the app
-will switch to live data automatically.
+## Configuration
+
+All configuration lives in env vars. See `.env.example` for the full list.
+
+### Single-tenant (current Staytuned deploy)
+
+```bash
+FEATUREBASE_API_KEY=fb_live_...
+FEATUREBASE_CATEGORY=Kiwi
+ROADMAP_URL=https://staytuned.featurebase.app/roadmap/kiwi-sizing
+```
+
+### Multi-tenant (public version)
+
+```bash
+# Database
+DATABASE_URL=postgres://...
+FB_ENCRYPTION_KEY=$(openssl rand -hex 32)
+
+# Intercom OAuth + signing
+INTERCOM_CLIENT_ID=...
+INTERCOM_CLIENT_SECRET=...
+INTERCOM_OAUTH_REDIRECT_URI=https://<your-domain>/auth/callback
+
+# Optional ops
+SENTRY_DSN=...
+ADMIN_TOKEN=$(openssl rand -hex 32)
+RATE_LIMIT_PER_MINUTE=120
+```
 
 ## Tests
 
@@ -53,145 +154,53 @@ will switch to live data automatically.
 npm test
 ```
 
-Uses the built-in `node:test` runner. No extra dev dependencies. Tests cover:
+35 tests on `main`, 48 on `multi-tenant`. CI runs on every push and
+PR via GitHub Actions (see `.github/workflows/ci.yml`).
 
-- `doneCanvas` / `errorCanvas` shape (header, per-post block, footer, empty state, error)
-- `getCompletedStatusId` resolution, caching, missing-status error, retry-on-failure
+## Deploying
 
-Both Featurebase tests stub `globalThis.fetch` – no network is touched.
+Railway is the simplest path:
 
-## Configuration
+1. **New Project → Deploy from GitHub** → pick this repo
+2. Pick the branch (`main` or `multi-tenant`)
+3. Set env vars from the relevant section above
+4. For multi-tenant: add the **Postgres** plugin (auto-injects `DATABASE_URL`)
+5. **Generate Domain** under Networking
 
-All config is read from environment variables (see `.env.example`):
+`npm start` auto-applies the DB schema before booting (idempotent —
+safe to re-run).
 
-| Var                          | Default                                       | Notes                                                   |
-| ---------------------------- | --------------------------------------------- | ------------------------------------------------------- |
-| `PORT`                       | `3000`                                        | Railway injects this automatically.                     |
-| `FEATUREBASE_API_KEY`        | *(empty → mock)*                              | Get from Featurebase dashboard → Settings → API.        |
-| `FEATUREBASE_BASE_URL`       | `https://do.featurebase.app`                  |                                                         |
-| `FEATUREBASE_VERSION`        | `2026-01-01.nova`                             | Sent as `Featurebase-Version` header.                   |
-| `FEATUREBASE_TIMEOUT_MS`     | `5000`                                        | Per-request abort timeout.                              |
-| `FEATUREBASE_RETRIES`        | `2`                                           | Retry count on the status-lookup call.                  |
-| `FEATUREBASE_MOCK`           | `false`                                       | Force mock data. Auto-on when API key is empty.         |
-| `ROADMAP_URL`                | `…/roadmap/kiwi-sizing`                       | "See full roadmap" button target.                       |
-| `MAX_ITEMS`                  | `8`                                           | Max posts shown.                                        |
+After deploying, in Intercom Developer Hub set the three Canvas Kit URLs:
 
-## Resilience
+- **Initialize URL:** `https://<your-domain>/initialize?v=1`
+- **Submit URL:** `https://<your-domain>/submit?v=1`
+- **Configure URL:** `https://<your-domain>/configure?v=1`
 
-- `fetch` is wrapped in an `AbortController` honouring `FEATUREBASE_TIMEOUT_MS`.
-- The status-lookup call retries `FEATUREBASE_RETRIES` times with linear backoff
-  (200ms × attempt). The post-list call does not retry – Intercom expects a fast
-  response, and the status id is cached after the first success anyway.
-- Any error during `/initialize` or `/submit` returns `errorCanvas()` – the user
-  sees a clean "Couldn't load the roadmap right now." card with a fallback
-  button to the public roadmap.
+Bump `?v=N` to bust Intercom's per-workspace canvas cache after any
+deploy or configuration change.
 
-## Deploy to Railway
+## Brand kit
 
-The simplest host for this. Railway auto-detects Node via `package.json`,
-injects `PORT`, and runs `npm start`.
-
-1. **Push to GitHub.**
-   ```bash
-   git add .
-   git commit -m "Initial Featurebase Intercom Canvas app"
-   gh repo create featurebase-intercom --private --source=. --push
-   ```
-2. **Create the Railway project.** From the dashboard: *New Project → Deploy
-   from GitHub repo → featurebase-intercom*. Or via CLI: `railway init` then
-   `railway up`.
-3. **Set env vars** in the Railway service → Variables tab:
-   - `FEATUREBASE_API_KEY` (required to leave MOCK mode)
-   - `ROADMAP_URL` (optional override)
-   - Everything else can use defaults.
-4. **Get the public URL.** Railway → Settings → Networking → *Generate Domain*.
-   You'll get something like `https://featurebase-intercom-production.up.railway.app`.
-5. **Wire up Intercom.** Developer Hub → your app → Canvas Kit, set:
-   - Initialize URL: `https://<your-domain>/initialize`
-   - Submit URL:     `https://<your-domain>/submit`
-6. **Sanity check.**
-   ```bash
-   curl https://<your-domain>/health
-   curl -X POST https://<your-domain>/initialize
-   ```
-
-### Alternatives if you'd rather not use Railway
-
-- **Render** (free tier exists, similar flow — connect repo, set env vars).
-- **Fly.io** (`fly launch` from the repo; needs `fly.toml`).
-- **Vercel** would require refactoring the Express app into serverless functions
-  — not worth it for this size of app.
-
-## Deploy to your own VPS (no GitHub required)
-
-Two scripts in `scripts/`:
-
-- **`provision.sh`** — runs once on the VPS as root. Installs Node 20, Caddy
-  (auto-TLS), creates a hardened `fbapp` system user, writes the systemd unit,
-  configures the firewall, and grants your SSH user passwordless sudo for the
-  deploy hook (and *only* the deploy hook).
-- **`deploy.ps1`** — runs from Windows every time you want to push an update.
-  Tars the project, scp's it up, runs the remote hook, and smoke-tests `/health`.
-
-### One-time setup
-
-```powershell
-# 1. Point a DNS A record (e.g. intercom-canvas.example.com) at the VPS IP.
-# 2. Copy provision.sh up and run it.
-scp scripts/provision.sh ubuntu@your-vps:/tmp/
-ssh ubuntu@your-vps "sudo DOMAIN=intercom-canvas.example.com bash /tmp/provision.sh"
-```
-
-The script is idempotent — safe to re-run if anything fails.
-
-### Every deploy after that
-
-```powershell
-scripts\deploy.ps1 -VpsHost your-vps -User ubuntu -Domain intercom-canvas.example.com
-```
-
-That's the whole loop. Edit code → run `deploy.ps1` → done. The script bundles,
-uploads, syncs (preserving `.env` and `node_modules`), runs `npm ci --omit=dev`,
-restarts the service, and confirms `/health` is responding over HTTPS.
-
-### When the Featurebase API key arrives
-
-The first deploy lands in MOCK mode (provision wrote a placeholder `.env` with
-the key blank). To go live:
+All Loop branding lives in `assets/`. Regenerate the PNG renders any
+time the SVG masters change:
 
 ```bash
-ssh ubuntu@your-vps
-sudo nano /opt/featurebase-intercom/.env       # set FEATUREBASE_API_KEY=...
-sudo systemctl restart featurebase-intercom
-curl https://intercom-canvas.example.com/health   # should now show "mock":false
+npm run logos
 ```
 
-The `.env` file lives on the server only and is **never** overwritten by
-`deploy.ps1` (the rsync inside `fb-deploy-finish` excludes it explicitly).
+The CI workflow verifies PNGs are up to date — forgetting to commit
+regenerated PNGs will fail CI.
 
-## Project layout
+## License
 
-```
-src/
-  config.js        env loading + defaults
-  featurebase.js   API client (timeout + retry), status-id cache
-  canvas.js        doneCanvas + errorCanvas builders
-  mock.js          mock data for offline dev
-  server.js        Express app, routes, logging
-test/
-  canvas.test.js
-  featurebase.test.js
-.env.example
-.gitignore
-package.json
-```
+Proprietary. © Loop authors. Not for redistribution.
 
-## Notes
+---
 
-- The folder name contains a space (`D:\FeatureBase - Widget`). Harmless for
-  Node, but quote it in shell commands. Railway sees only the repo, so the
-  local folder name doesn't reach production.
-- The `body-parser` dependency from the original draft was dropped — Express
-  4.16+ ships `express.json()` natively.
-- No submit-flow form yet (read-only Done list). When you're ready to add
-  interactive components, the `/submit` handler is the entry point.
+## Further reading
+
+- [`PROJECT_STATE.md`](./PROJECT_STATE.md) — canonical project status
+- [`MULTI_TENANT_ROADMAP.md`](./MULTI_TENANT_ROADMAP.md) — multi-tenant phase tracker *(on `multi-tenant` branch)*
+- [`APP_STORE_LISTING.md`](./APP_STORE_LISTING.md) — App Store submission copy *(on `multi-tenant` branch)*
+- [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) — full privacy template *(on `multi-tenant` branch)*
+- [`TERMS.md`](./TERMS.md) — full terms template *(on `multi-tenant` branch)*
