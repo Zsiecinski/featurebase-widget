@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loop — Mockups for screenshots</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/website/styles.css">
+  <style>
+    /* This page is for taking branded screenshots for the App Store listing.
+       Each mockup is rendered at 2560x1600 hidpi if you screenshot the
+       individual <figure> at retina scale. The CSS messenger-mock from
+       styles.css is reused as the base. */
+    body { background: linear-gradient(135deg, #FFE4E6 0%, #FFF1F2 100%); padding: 64px 0; }
+    @media (prefers-color-scheme: dark) {
+      body { background: linear-gradient(135deg, #1E1B4B 0%, #0F0A2E 100%); }
+    }
+    .shot-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 96px;
+    }
+    .shot {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+      background: var(--bg);
+      border-radius: var(--radius-xl);
+      padding: 64px;
+      box-shadow: var(--shadow-lg);
+    }
+    @media (max-width: 900px) {
+      .shot { grid-template-columns: 1fr; padding: 32px; gap: 32px; }
+    }
+    .shot--reversed { direction: rtl; }
+    .shot--reversed > * { direction: ltr; }
+
+    .shot__intro h2 {
+      font-size: 2.5rem;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+    .shot__intro h2 .accent {
+      background: linear-gradient(135deg, var(--coral-500), var(--coral-300));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .shot__intro p {
+      font-size: 1.15rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .shot__visual {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Wider mockup variant for the detail view */
+    .messenger-mock--detail {
+      width: 380px;
+      max-width: 100%;
+    }
+    .messenger-mock__back {
+      color: var(--coral-600);
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 14px;
+    }
+    .messenger-mock__big-pill {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: white;
+      margin-bottom: 16px;
+    }
+    .messenger-mock__big-pill--improved { background: #8B5CF6; }
+    .messenger-mock__big-pill--inprogress { background: #3B82F6; }
+    .messenger-mock__detail-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink-900);
+      margin-bottom: 6px;
+      line-height: 1.25;
+    }
+    .messenger-mock__detail-meta {
+      font-size: 0.85rem;
+      color: var(--ink-500);
+      margin-bottom: 16px;
+    }
+    .messenger-mock__divider {
+      height: 1px;
+      background: #F1F5F9;
+      margin: 16px -22px;
+    }
+    .messenger-mock__body {
+      font-size: 0.92rem;
+      color: var(--ink-700);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .messenger-mock__body-h {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--ink-900);
+      margin: 16px 0 8px;
+    }
+
+    /* Coming Next section */
+    .messenger-mock__section-header {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink-900);
+      margin-top: 14px;
+    }
+
+    .shot__caption {
+      text-align: center;
+      margin-top: 32px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="shot-grid">
+
+    <!-- ─── Shot 1: Home view, recently shipped ─── -->
+    <figure class="shot">
+      <div class="shot__intro">
+        <h2>See what shipped, <span class="accent">right in chat.</span></h2>
+        <p>Loop renders your Featurebase changelog inside the Intercom Messenger. Customers who open chat to ask about a feature see the answer before they have to type the question.</p>
+      </div>
+      <div class="shot__visual">
+        <div class="messenger-mock">
+          <div class="messenger-mock__inner">
+            <div class="messenger-mock__header">Recently shipped</div>
+            <div class="messenger-mock__sub">Features we just launched. Tap an item for details.</div>
+
+            <div class="messenger-mock__item">
+              <span class="messenger-mock__pill messenger-mock__pill--improved">IMPROVED</span>
+              <div>
+                <div class="messenger-mock__title">Added Theme Support for Size Chart Placement</div>
+                <div class="messenger-mock__meta">Updated Feb 27 · 3 comments</div>
+              </div>
+            </div>
+            <div class="messenger-mock__item">
+              <span class="messenger-mock__pill messenger-mock__pill--fixed">FIXED</span>
+              <div>
+                <div class="messenger-mock__title">Bug Fixes</div>
+                <div class="messenger-mock__meta">Updated Jan 27</div>
+              </div>
+            </div>
+            <div class="messenger-mock__item">
+              <span class="messenger-mock__pill messenger-mock__pill--new">NEW</span>
+              <div>
+                <div class="messenger-mock__title">Recommender Updates</div>
+                <div class="messenger-mock__meta">Updated Jan 27</div>
+              </div>
+            </div>
+
+            <div class="messenger-mock__cta">See full roadmap</div>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ─── Shot 2: Detail / drill-down view ─── -->
+    <figure class="shot shot--reversed">
+      <div class="shot__intro">
+        <h2>Full updates without <span class="accent">leaving Messenger.</span></h2>
+        <p>Tap any item to expand the full update. Title, body, dates — all rendered natively. The "Open on Featurebase" button is there if customers want to comment or upvote.</p>
+      </div>
+      <div class="shot__visual">
+        <div class="messenger-mock messenger-mock--detail">
+          <div class="messenger-mock__inner">
+            <div class="messenger-mock__back">← Back to all</div>
+            <span class="messenger-mock__big-pill messenger-mock__big-pill--improved">IMPROVED</span>
+            <div class="messenger-mock__detail-title">Added Theme Support for Size Chart Placement</div>
+            <div class="messenger-mock__detail-meta">Updated Feb 27 · Kiwi Sizing · 3 comments</div>
+            <div class="messenger-mock__divider"></div>
+
+            <div class="messenger-mock__body-h">What changed</div>
+            <div class="messenger-mock__body">After reviewing the most popular themes used by Kiwi customers, we added support for the Prestige and Impulse themes.</div>
+
+            <div class="messenger-mock__body-h">Why it matters</div>
+            <div class="messenger-mock__body">Merchants can now place the size chart next to the Size header without writing custom code.</div>
+
+            <div class="messenger-mock__cta">Open on Featurebase</div>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ─── Shot 3: Recently shipped + Coming next ─── -->
+    <figure class="shot">
+      <div class="shot__intro">
+        <h2>Anticipate what's <span class="accent">coming next.</span></h2>
+        <p>Optional "Coming next" section surfaces in-progress roadmap items. Loop becomes a habit — customers come back to check what's being built, not just what shipped.</p>
+      </div>
+      <div class="shot__visual">
+        <div class="messenger-mock messenger-mock--detail">
+          <div class="messenger-mock__inner">
+            <div class="messenger-mock__header">Recently shipped</div>
+            <div class="messenger-mock__sub">Features we just launched.</div>
+
+            <div class="messenger-mock__item">
+              <span class="messenger-mock__pill messenger-mock__pill--improved">IMPROVED</span>
+              <div>
+                <div class="messenger-mock__title">Theme Support for Size Chart</div>
+                <div class="messenger-mock__meta">Updated Feb 27</div>
+              </div>
+            </div>
+            <div class="messenger-mock__item">
+              <span class="messenger-mock__pill messenger-mock__pill--new">NEW</span>
+              <div>
+                <div class="messenger-mock__title">Recommender Updates</div>
+                <div class="messenger-mock__meta">Updated Jan 27</div>
+              </div>
+            </div>
+
+            <div class="messenger-mock__divider"></div>
+            <div class="messenger-mock__section-header">Coming next</div>
+            <div class="messenger-mock__sub">What we're actively building.</div>
+
+            <div class="messenger-mock__item">
+              <span class="messenger-mock__pill" style="background:#3B82F6;">IN PROGRESS</span>
+              <div>
+                <div class="messenger-mock__title">AI-powered size recommendations v3</div>
+                <div class="messenger-mock__meta">47 upvotes · 12 comments</div>
+              </div>
+            </div>
+            <div class="messenger-mock__item">
+              <span class="messenger-mock__pill" style="background:#3B82F6;">IN PROGRESS</span>
+              <div>
+                <div class="messenger-mock__title">Bulk size chart editor</div>
+                <div class="messenger-mock__meta">23 upvotes</div>
+              </div>
+            </div>
+
+            <div class="messenger-mock__cta">See full roadmap</div>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <p class="shot__caption">Screenshot these mockups at 2x density for the App Store listing.</p>
+  </div>
+
+</body>
+</html>
