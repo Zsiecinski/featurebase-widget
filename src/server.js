@@ -434,6 +434,18 @@ app.get('/debug/changelogs', async (req, res) => {
   }
 });
 
+// 404 handler — branded HTML page for browser visits, JSON for API requests.
+// Content-negotiated via req.accepts(). Mounted after all routes.
+app.use((req, res, next) => {
+  if (res.headersSent) return next();
+  const wantsHtml = req.accepts(['json', 'html']) === 'html';
+  if (wantsHtml) {
+    res.status(404).sendFile(path.join(websiteDir, '404.html'));
+  } else {
+    res.status(404).json({ error: 'not found', path: req.path });
+  }
+});
+
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {
     const mode = config.mock ? ' (MOCK mode — no API key set)' : '';
