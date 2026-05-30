@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, multi-tenant]
+  pull_request:
+    branches: [main, multi-tenant]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify PNG assets are up to date
+        run: |
+          npm run logos
+          if [ -n "$(git status --porcelain assets/)" ]; then
+            echo "::error::PNG assets are out of date. Run 'npm run logos' locally and commit the result."
+            git diff --stat assets/
+            exit 1
+          fi
