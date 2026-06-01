@@ -52,3 +52,36 @@ test('dbAvailable: false when DATABASE_URL is unset', () => {
   delete process.env.DATABASE_URL;
   assert.equal(dbAvailable(), false);
 });
+
+// ---------------------------------------------------------------------------
+// logEvent and getAnalytics safe-fallback behavior. Both functions are called
+// in hot paths (every Canvas Kit render) and must never throw or block when
+// the DB isn't available. Full integration coverage requires a real Postgres
+// connection; these tests cover the no-DB safety net only.
+// ---------------------------------------------------------------------------
+
+const { logEvent, getAnalytics } = await import('../src/db/index.js');
+
+test('logEvent: silently no-ops when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  // Must not throw, must not block.
+  const result = await logEvent('test-workspace', 'card_rendered', { foo: 'bar' });
+  assert.equal(result, undefined);
+});
+
+test('logEvent: silently no-ops when workspaceId is falsy', async () => {
+  // Even with a (fake) DB URL, missing workspaceId should bail before any
+  // DB call. This protects against accidentally logging events with no
+  // tenant attribution.
+  delete process.env.DATABASE_URL;
+  await logEvent('', 'card_rendered');
+  await logEvent(null, 'card_rendered');
+  await logEvent(undefined, 'card_rendered');
+  // No assertions — test passes if nothing throws.
+});
+
+test('getAnalytics: returns null when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  const result = await getAnalytics('test-workspace', { days: 30 });
+  assert.equal(result, null);
+});

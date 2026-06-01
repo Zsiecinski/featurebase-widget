@@ -22,20 +22,38 @@ import {
 function requireAdminToken(req, res, next) {
   const required = process.env.ADMIN_TOKEN;
   if (!required) return res.status(404).end();
+  // Accept either the standard Authorization: Bearer header (preferred —
+  // doesn't leak into browser history) or a ?token=... query param
+  // (convenient for direct browser navigation into the HTML dashboard).
   const auth = req.get('Authorization') || '';
-  if (auth !== `Bearer ${required}`) {
-    return res.status(401).json({ error: 'invalid admin token' });
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
+  if (auth === `Bearer ${required}` || queryToken === required) {
+    return next();
   }
-  next();
+  return res.status(401).json({ error: 'invalid admin token' });
 }
 
 export function registerAdminRoutes(app) {
   app.get('/admin/tenants', requireAdminToken, async (req, res) => {
-    if (!dbAvailable()) return res.json({ tenants: [], note: 'DB not configured' });
+    if (!dbAvailable()) {
+      if (req.accepts(['json', 'html']) === 'html') {
+        return res.type('html').send('<p style="font-family:sans-serif;padding:32px">DB not configured.</p>');
+      }
+      return res.json({ tenants: [], note: 'DB not configured' });
+    }
     const limit = Number(req.query.limit) || 50;
     const offset = Number(req.query.offset) || 0;
     const includeUninstalled = req.query.uninstalled === 'true';
     const tenants = await listTenants({ limit, offset, includeUninstalled });
+
+    const wantsHtml =
+      req.query.format === 'html' ||
+      (req.query.format !== 'json' && req.accepts(['json', 'html']) === 'html');
+    if (wantsHtml) {
+      return res.type('html').send(
+        tenantsHtml(tenants, { includeUninstalled, token: req.get('Authorization')?.replace(/^Bearer\s+/, '') }),
+      );
+    }
     res.json({
       tenants,
       count: tenants.length,
@@ -91,17 +109,148 @@ export function registerAdminRoutes(app) {
       req.query.format === 'html' ||
       (req.query.format !== 'json' && req.accepts(['json', 'html']) === 'html');
     if (wantsHtml) {
-      res.type('html').send(analyticsHtml(data));
+      const token = req.get('Authorization')?.replace(/^Bearer\s+/, '') || req.query.token || '';
+      res.type('html').send(analyticsHtml(data, { token }));
       return;
     }
     res.json(data);
   });
 }
 
+// Common escape helper for HTML renderers.
+function escapeHtmlValue(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[c]);
+}
+
+// Render the full tenant list as a clickable HTML dashboard. Used for
+// quick ops review — see all installed workspaces at a glance, jump
+// into any one's analytics with one click.
+function tenantsHtml(tenants, { includeUninstalled, token = '' }) {
+  const tokenSuffix = token ? `&token=${encodeURIComponent(token)}` : '';
+  const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+  const dt = (s) => (s ? new Date(s).toISOString().slice(0, 10) : '—');
+  const rows = tenants.length
+    ? tenants
+        .map((t) => {
+          const statusPill = t.uninstalledAt
+            ? `<span class="pill pill--off">UNINSTALLED</span>`
+            : t.featurebase.apiKeySet
+              ? `<span class="pill pill--on">ACTIVE</span>`
+              : `<span class="pill pill--pending">NEEDS SETUP</span>`;
+          const fbCat = t.featurebase.category
+            ? `<code>${escapeHtmlValue(t.featurebase.category)}</code>`
+            : '<span class="muted">all</span>';
+          return `
+        <tr>
+          <td><a href="/admin/analytics/${encodeURIComponent(t.workspaceId)}?format=html${tokenSuffix}"><code>${escapeHtmlValue(t.workspaceId)}</code></a></td>
+          <td>${escapeHtmlValue(t.email || '')}</td>
+          <td>${statusPill}</td>
+          <td class="num">${dt(t.installedAt)}</td>
+          <td class="num">${dt(t.lastUsedAt)}</td>
+          <td>${fbCat}</td>
+        </tr>`;
+        })
+        .join('')
+    : `<tr><td colspan="6" class="muted-row">No tenants yet.</td></tr>`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loop tenants dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+    background: #F8FAFC; color: #0F172A; padding: 32px 24px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.65rem; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .sub { color: #64748B; font-size: 0.9rem; margin-bottom: 24px; }
+  .filters { margin-bottom: 16px; }
+  .filters a {
+    display: inline-block; padding: 6px 14px; border-radius: 6px;
+    font-size: 0.82rem; font-weight: 600; text-decoration: none;
+    border: 1px solid #E2E8F0; color: #334155; background: white;
+    margin-right: 8px;
+  }
+  .filters a.active { background: #F43F5E; color: white; border-color: #F43F5E; }
+  table {
+    width: 100%; border-collapse: collapse; background: white;
+    border: 1px solid #F1F5F9; border-radius: 10px; overflow: hidden;
+    font-size: 0.92rem;
+  }
+  th, td { padding: 12px 16px; text-align: left; }
+  th {
+    background: #F8FAFC; font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.06em; color: #64748B; border-bottom: 1px solid #F1F5F9;
+  }
+  tr:not(:last-child) td { border-bottom: 1px solid #F1F5F9; }
+  td a { color: #BE123C; font-weight: 600; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.85em; background: #F1F5F9;
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 4px;
+    font-size: 0.65rem; font-weight: 800; letter-spacing: 0.08em;
+    color: white;
+  }
+  .pill--on { background: #10B981; }
+  .pill--off { background: #94A3B8; }
+  .pill--pending { background: #F59E0B; }
+  .muted { color: #94A3B8; font-style: italic; }
+  .muted-row { color: #64748B; font-style: italic; padding: 24px; text-align: center; }
+  .footer {
+    margin-top: 24px; font-size: 0.78rem; color: #64748B; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Loop tenants</h1>
+  <div class="sub">${fmt(tenants.length)} ${includeUninstalled ? 'total (incl. uninstalled)' : 'active'}</div>
+
+  <div class="filters">
+    <a class="${includeUninstalled ? '' : 'active'}" href="?format=html${tokenSuffix}">Active only</a>
+    <a class="${includeUninstalled ? 'active' : ''}" href="?format=html&uninstalled=true${tokenSuffix}">Include uninstalled</a>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Workspace ID</th>
+        <th>Admin email</th>
+        <th>Status</th>
+        <th>Installed</th>
+        <th>Last active</th>
+        <th>FB category</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+
+  <div class="footer">
+    Click any workspace ID to drill into per-tenant analytics ·
+    <a href="?format=json${tokenSuffix}" style="color: #BE123C;">view as JSON</a> ·
+    <a href="/admin/events?${token ? `token=${encodeURIComponent(token)}` : ''}" style="color: #BE123C;">recent events (JSON)</a>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
 // Render the analytics summary as a self-contained HTML page. No external
 // CSS, no JS — works in any browser, prints cleanly, copy-pasteable into
 // support tickets. Coral-on-slate to match Loop's marketing palette.
-function analyticsHtml(d) {
+function analyticsHtml(d, { token = '' } = {}) {
+  const tokenSuffix = token ? `&token=${encodeURIComponent(token)}` : '';
   const fmt = (n) => Number(n || 0).toLocaleString('en-US');
   const pct = (n) => `${(Number(n || 0) * 100).toFixed(1)}%`;
   const dt = (s) => (s ? new Date(s).toISOString().slice(0, 19).replace('T', ' ') + ' UTC' : '—');
@@ -311,7 +460,8 @@ function analyticsHtml(d) {
 
   <div class="footer">
     Loop internal analytics · query: <code>?days=${d.periodDays}</code> ·
-    <a href="?format=json&days=${d.periodDays}">view as JSON</a>
+    <a href="?format=json&days=${d.periodDays}${tokenSuffix}">view as JSON</a> ·
+    <a href="/admin/tenants?format=html${tokenSuffix}">← back to all tenants</a>
   </div>
 </div>
 </body>
