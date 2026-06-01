@@ -196,6 +196,124 @@ export async function listTenants({ limit = 50, offset = 0, includeUninstalled =
 }
 
 /**
+ * Log a tenant event by workspace_id. Fire-and-forget safe; caller should
+ * not await the returned promise in hot paths (renders, etc.) because we
+ * don't want a slow DB write to delay the Canvas Kit response. Missing
+ * tenant rows are silently ignored (event for an unknown workspace = noise).
+ */
+export async function logEvent(workspaceId, event, metadata = {}) {
+  const s = init();
+  if (!s || !workspaceId) return;
+  try {
+    const rows = await s`
+      SELECT id FROM tenants WHERE intercom_workspace_id = ${workspaceId} LIMIT 1
+    `;
+    if (rows.length === 0) return;
+    await s`
+      INSERT INTO tenant_events (tenant_id, event, metadata)
+      VALUES (${rows[0].id}, ${event}, ${s.json(metadata || {})})
+    `;
+    // Bump last_used_at on revenue-meaningful events (render, click). Cheap.
+    if (event === 'card_rendered' || event === 'item_clicked') {
+      await s`
+        UPDATE tenants SET last_used_at = NOW()
+        WHERE id = ${rows[0].id}
+      `;
+    }
+  } catch (err) {
+    // Never propagate event-log errors into the response path.
+    console.error('[logEvent]', event, err.message);
+  }
+}
+
+/**
+ * Per-tenant analytics summary. Aggregates tenant_events into a few headline
+ * numbers: cards rendered, item clicks, click-through rate, top items, etc.
+ * Used by the internal /admin/analytics/:workspace_id endpoint and is the
+ * groundwork for the future Pro-tier customer-facing dashboard.
+ */
+export async function getAnalytics(workspaceId, { days = 30 } = {}) {
+  const s = init();
+  if (!s) return null;
+  const [tenant] = await s`
+    SELECT id, intercom_workspace_id, intercom_admin_email,
+           installed_at, configured_at, last_used_at, uninstalled_at
+    FROM tenants
+    WHERE intercom_workspace_id = ${workspaceId}
+    LIMIT 1
+  `;
+  if (!tenant) return null;
+
+  const since = await s`SELECT NOW() - ${Number(days)}::int * INTERVAL '1 day' AS d`;
+  const sinceDate = since[0].d;
+
+  const periodCounts = await s`
+    SELECT event, COUNT(*)::int AS count
+    FROM tenant_events
+    WHERE tenant_id = ${tenant.id}
+      AND created_at >= ${sinceDate}
+    GROUP BY event
+  `;
+  const allTimeCounts = await s`
+    SELECT event, COUNT(*)::int AS count
+    FROM tenant_events
+    WHERE tenant_id = ${tenant.id}
+    GROUP BY event
+  `;
+  const topItems = await s`
+    SELECT metadata->>'item_id' AS item_id,
+           metadata->>'item_title' AS item_title,
+           COUNT(*)::int AS clicks
+    FROM tenant_events
+    WHERE tenant_id = ${tenant.id}
+      AND event = 'item_clicked'
+      AND metadata->>'item_id' IS NOT NULL
+      AND created_at >= ${sinceDate}
+    GROUP BY metadata->>'item_id', metadata->>'item_title'
+    ORDER BY clicks DESC
+    LIMIT 5
+  `;
+
+  const period = Object.fromEntries(periodCounts.map((r) => [r.event, r.count]));
+  const allTime = Object.fromEntries(allTimeCounts.map((r) => [r.event, r.count]));
+  const renders = period.card_rendered || 0;
+  const clicks = period.item_clicked || 0;
+
+  return {
+    tenant: {
+      workspaceId: tenant.intercom_workspace_id,
+      email: tenant.intercom_admin_email,
+      installedAt: tenant.installed_at,
+      configuredAt: tenant.configured_at,
+      lastUsedAt: tenant.last_used_at,
+      uninstalledAt: tenant.uninstalled_at,
+    },
+    periodDays: Number(days),
+    period: {
+      cardsRendered: renders,
+      itemClicks: clicks,
+      clickThroughRate: renders > 0 ? Number((clicks / renders).toFixed(3)) : 0,
+      configureOpened: period.configure_opened || 0,
+      configureSaved: period.configure_saved || 0,
+      installs: period.install || 0,
+      uninstalls: period.uninstall || 0,
+    },
+    allTime: {
+      cardsRendered: allTime.card_rendered || 0,
+      itemClicks: allTime.item_clicked || 0,
+      configureSaved: allTime.configure_saved || 0,
+      installs: allTime.install || 0,
+      uninstalls: allTime.uninstall || 0,
+    },
+    topClickedItems: topItems.map((r) => ({
+      itemId: r.item_id,
+      title: r.item_title,
+      clicks: r.clicks,
+    })),
+  };
+}
+
+/**
  * Recent tenant_events for support / ops visibility. Useful for spotting
  * a spike in fb_auth_failed events or unusual install rates.
  */

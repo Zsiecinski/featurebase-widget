@@ -20,6 +20,7 @@ import {
   dbAvailable,
   findTenantByWorkspace,
   saveFeaturebaseConfig,
+  logEvent,
 } from './db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -215,7 +216,13 @@ async function renderCanvas(req, res) {
   // unconfigured tenant shows a friendly "needs setup" canvas instead of an
   // error — the configure form is where they fix it.
   const resolved = await resolveCredentials(req);
+  const tenantWorkspaceId =
+    resolved.workspaceId ||
+    req.body?.workspace_id ||
+    req.body?.context?.workspace_id;
+
   if (resolved.needsSetup) {
+    logEvent(tenantWorkspaceId, 'needs_setup_shown', { reason: resolved.reason }).catch(() => {});
     return res.send(needsSetupCanvas({ reason: resolved.reason, baseUrl }));
   }
   const credentials = resolved.credentials;
@@ -225,6 +232,10 @@ async function renderCanvas(req, res) {
     if (componentId.startsWith('item_')) {
       const entryId = componentId.slice('item_'.length);
       const entry = await getChangelogById(credentials, entryId);
+      logEvent(tenantWorkspaceId, 'item_clicked', {
+        item_id: entryId,
+        item_title: entry?.title || null,
+      }).catch(() => {});
       return res.send(detailCanvas(entry, { expanded, baseUrl }));
     }
 
@@ -237,6 +248,11 @@ async function renderCanvas(req, res) {
         ? getInProgressPosts(credentials, { limit: config.comingNextCount })
         : Promise.resolve([]),
     ]);
+    logEvent(tenantWorkspaceId, 'card_rendered', {
+      trigger: componentId || 'cold_open',
+      expanded,
+      entry_count: entries.length,
+    }).catch(() => {});
     res.send(
       homeCanvas(entries, {
         expanded,
@@ -466,6 +482,10 @@ app.post('/configure', verifyCanvasKitSignature, async (req, res) => {
       if (workspaceId && newKey) {
         const check = await validateCredentials({ apiKey: newKey });
         if (!check.ok) {
+          logEvent(workspaceId, 'configure_save_failed', {
+            reason: 'fb_validation_failed',
+            error: check.error,
+          }).catch(() => {});
           // Re-render the form with an error message so the teammate can fix it.
           return res.send(
             configureCanvas(
@@ -479,9 +499,21 @@ app.post('/configure', verifyCanvasKitSignature, async (req, res) => {
           apiKey: newKey,
           category: newCategory,
         });
+        logEvent(workspaceId, 'configure_saved', {
+          updated: 'api_key_and_category',
+          has_category: Boolean(newCategory),
+        }).catch(() => {});
       } else if (workspaceId && newCategory) {
         // Category-only update (key already saved previously).
         await saveFeaturebaseConfig({ workspaceId, category: newCategory });
+        logEvent(workspaceId, 'configure_saved', {
+          updated: 'category_only',
+        }).catch(() => {});
+      } else if (workspaceId) {
+        // Display-only settings change (no FB credential update).
+        logEvent(workspaceId, 'configure_saved', {
+          updated: 'display_options_only',
+        }).catch(() => {});
       }
     }
 

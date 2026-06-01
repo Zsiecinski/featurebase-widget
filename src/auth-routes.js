@@ -19,6 +19,7 @@ import {
 import {
   upsertTenantOnInstall,
   markUninstalled,
+  logEvent,
   dbAvailable,
 } from './db/index.js';
 
@@ -84,6 +85,8 @@ export function registerAuthRoutes(app) {
     }
     if (dbAvailable()) {
       await markUninstalled(workspaceId);
+      // Fire-and-forget: don't block the response on event logging.
+      logEvent(workspaceId, 'uninstall').catch(() => {});
       console.log(`[auth/uninstall] marked workspace ${workspaceId} uninstalled`);
     }
     res.json({ ok: true });

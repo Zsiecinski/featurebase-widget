@@ -15,6 +15,7 @@ import {
   findTenantByWorkspace,
   listTenants,
   recentEvents,
+  getAnalytics,
   dbAvailable,
 } from './db/index.js';
 
@@ -67,5 +68,19 @@ export function registerAdminRoutes(app) {
       },
       configured: tenant.configured,
     });
+  });
+
+  // Per-workspace analytics summary. Groundwork for the future Pro-tier
+  // customer-facing dashboard — for now, internal-only behind ADMIN_TOKEN.
+  // Aggregates tenant_events into headline metrics: cards rendered, item
+  // clicks, click-through rate, top items, install/uninstall counts.
+  // Query params: ?days=N (default 30, max 365)
+  app.get('/admin/analytics/:workspaceId', requireAdminToken, async (req, res) => {
+    if (!dbAvailable()) return res.status(503).json({ error: 'DB not configured' });
+    const requested = Number(req.query.days) || 30;
+    const days = Math.min(Math.max(requested, 1), 365);
+    const data = await getAnalytics(req.params.workspaceId, { days });
+    if (!data) return res.status(404).json({ error: 'tenant not found' });
+    res.json(data);
   });
 }
