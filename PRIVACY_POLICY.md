@@ -31,6 +31,15 @@ Canvas Kit protocol (the request workspace ID, the component the user
 interacted with) to render the response. We do not log customer
 identities or message content.
 
+### A note on OAuth scopes
+Intercom requires all Messenger Home apps to be granted a baseline
+set of OAuth scopes, including "Read users and companies" and "Read
+conversations". These scopes are platform defaults — Loop's source
+code never calls the corresponding Intercom API endpoints, and no
+user, company, or conversation data is ever read, stored, or
+processed by Loop. The grant is held by Intercom and used only as
+required for Loop's Canvas Kit responses to render.
+
 ### Automatically collected
 Standard server logs:
 

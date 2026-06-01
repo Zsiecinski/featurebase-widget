@@ -49,6 +49,9 @@
     <h3>From your customers — none</h3>
     <p><strong>Loop does not read, store, or process any messages, contacts, or profile data from your Intercom Messenger.</strong> When a customer opens Loop's Canvas Kit card, we receive only metadata required by the Canvas Kit protocol (the request workspace ID, the component the user interacted with) to render the response. We do not log customer identities or message content.</p>
 
+    <h3>A note on OAuth scopes</h3>
+    <p>Intercom requires all Messenger Home apps to be granted a baseline set of OAuth scopes, including "Read users and companies" and "Read conversations". These scopes are platform defaults — Loop's source code never calls the corresponding Intercom API endpoints, and no user, company, or conversation data is ever read, stored, or processed by Loop. The grant is held by Intercom and used only as required for Loop's Canvas Kit responses to render.</p>
+
     <h3>Automatically collected</h3>
     <p>Standard server logs: HTTP request method, path, timestamp, status code, response time, errors and stack traces (without personal data). Retained for 30 days for debugging and abuse prevention, then deleted.</p>
 
