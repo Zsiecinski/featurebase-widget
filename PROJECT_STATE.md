@@ -8,6 +8,14 @@ Last updated: 2026-05-30 — after Phase 6 ops infrastructure + CI + docs + mark
 
 ---
 
+## For the operator: launching this thing
+
+**→ [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md)** is the step-by-step
+guide from "Loop works for Staytuned" to "Loop is live in the Intercom
+App Store." Read that if you're trying to ship the public version. This
+file (PROJECT_STATE.md) is for understanding what the codebase IS;
+LAUNCH_CHECKLIST is for understanding what to DO.
+
 ## TL;DR
 
 **What Loop is:** Intercom Canvas Kit app that surfaces the Featurebase
