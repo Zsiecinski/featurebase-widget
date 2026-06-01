@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roadmap — Loop</title>
+  <meta name="description" content="What's shipped, what's in progress, and what's coming next for Loop.">
+  <link rel="canonical" href="https://loop.kbpulse.com/website/roadmap.html">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/website/styles.css">
+  <style>
+    .roadmap-page {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 64px 24px 96px;
+    }
+    .roadmap-page h1 {
+      font-size: 3rem;
+      letter-spacing: -0.04em;
+      margin-bottom: 12px;
+      font-weight: 800;
+    }
+    .roadmap-page > p.lead {
+      font-size: 1.2rem;
+      color: var(--muted);
+      max-width: 640px;
+      margin-bottom: 48px;
+      line-height: 1.55;
+    }
+    .roadmap-section {
+      margin-bottom: 56px;
+    }
+    .roadmap-section h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: white;
+      vertical-align: middle;
+    }
+    .section-pill--shipped { background: #10B981; }
+    .section-pill--progress { background: #3B82F6; }
+    .section-pill--planned { background: #8B5CF6; }
+    .section-pill--exploring { background: #94A3B8; }
+    .roadmap-section .sub {
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-size: 0.95rem;
+    }
+    .item-list {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .item {
+      background: var(--surface);
+      border: 1px solid var(--ink-200);
+      border-radius: 12px;
+      padding: 18px 22px;
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+    }
+    .item__type {
+      flex-shrink: 0;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: white;
+      margin-top: 2px;
+      min-width: 90px;
+      text-align: center;
+    }
+    .type--new       { background: #10B981; }
+    .type--improved  { background: #8B5CF6; }
+    .type--fixed     { background: #F97316; }
+    .type--planned   { background: #6366F1; }
+    .type--research  { background: #94A3B8; }
+    .item__body {
+      flex: 1;
+    }
+    .item__title {
+      font-weight: 700;
+      color: var(--fg);
+      font-size: 1rem;
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+    .item__desc {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+    .item__meta {
+      font-size: 0.78rem;
+      color: var(--ink-400);
+      margin-top: 6px;
+    }
+    .vote-cta {
+      background: var(--coral-50);
+      border: 1px solid var(--coral-300);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 48px;
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+    .vote-cta__icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      background: var(--coral-500);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      flex-shrink: 0;
+    }
+    .vote-cta__body strong {
+      color: var(--coral-700);
+      display: block;
+      margin-bottom: 4px;
+      font-size: 1.05rem;
+    }
+    .vote-cta__body span {
+      color: var(--ink-700);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .vote-cta__body a {
+      color: var(--coral-600);
+      font-weight: 600;
+    }
+    @media (max-width: 600px) {
+      .roadmap-page h1 { font-size: 2.25rem; }
+      .item { flex-direction: column; gap: 8px; }
+      .item__type { align-self: flex-start; }
+      .vote-cta { flex-direction: column; align-items: flex-start; gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a href="/" class="brand">
+        <img src="/assets/logo.svg" alt="Loop">
+        Loop
+      </a>
+      <nav class="site-nav">
+        <a href="/#features">Features</a>
+        <a href="/website/roadmap.html">Roadmap</a>
+        <a href="/website/docs.html">Docs</a>
+        <a class="btn btn-primary" href="https://www.intercom.com/app-store">Install on Intercom</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="roadmap-page">
+    <h1>Loop roadmap</h1>
+    <p class="lead">What's shipped, what's in progress, what's coming next, and what we're still exploring. Updated as we ship.</p>
+
+    <div class="vote-cta">
+      <div class="vote-cta__icon">∞</div>
+      <div class="vote-cta__body">
+        <strong>Have a feature request?</strong>
+        <span>Loop is in its first 90 days. If a planned item below would change whether you'd pay for Pro, tell us — we prioritize what installers actually ask for. Email <a href="mailto:support@kbpulse.com">support@kbpulse.com</a>.</span>
+      </div>
+    </div>
+
+    <!-- ─── SHIPPED ─── -->
+    <section class="roadmap-section">
+      <h2><span class="section-pill section-pill--shipped">Shipped</span> v1.0 — Launch</h2>
+      <p class="sub">Available today in the Intercom App Store. Free during early access.</p>
+      <ul class="item-list">
+        <li class="item">
+          <span class="item__type type--new">NEW</span>
+          <div class="item__body">
+            <div class="item__title">Recently shipped card on Messenger Home</div>
+            <div class="item__desc">Live Featurebase changelog rendering inside Intercom's Messenger. NEW / IMPROVED / FIXED color-coded pills, ship dates, comment counts.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--new">NEW</span>
+          <div class="item__body">
+            <div class="item__title">Detail view with full release notes</div>
+            <div class="item__desc">Tap any item to read the complete release note inline. "Open on Featurebase" button for customers who want to comment or upvote.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--new">NEW</span>
+          <div class="item__body">
+            <div class="item__title">Optional "Coming next" section</div>
+            <div class="item__desc">Surface in-progress roadmap items with upvote counts. Loop becomes a forward-looking habit, not just a retrospective view.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--new">NEW</span>
+          <div class="item__body">
+            <div class="item__title">Per-workspace configuration</div>
+            <div class="item__desc">Featurebase API key, category filter, display toggles, custom header text, custom footer button. No code required.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--new">NEW</span>
+          <div class="item__body">
+            <div class="item__title">Encrypted at rest, HMAC-verified webhooks</div>
+            <div class="item__desc">Featurebase API keys are encrypted with AES-256-GCM. All Canvas Kit webhook requests are verified via HMAC-SHA256 signature before processing.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ─── IN PROGRESS ─── -->
+    <section class="roadmap-section">
+      <h2><span class="section-pill section-pill--progress">In progress</span> Quietly building</h2>
+      <p class="sub">Likely to land in the next 30-60 days. Free workspaces will see most of these.</p>
+      <ul class="item-list">
+        <li class="item">
+          <span class="item__type type--improved">IMPROVED</span>
+          <div class="item__body">
+            <div class="item__title">Loop Analytics dashboard</div>
+            <div class="item__desc">See exactly how Loop is performing for your workspace: card renders, item clicks, click-through rate, top-clicked items, "deflection rate" estimate. This is the headline Pro feature — admins want proof Loop is working.</div>
+            <div class="item__meta">Backend already tracking events. Dashboard UI in design.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--improved">IMPROVED</span>
+          <div class="item__body">
+            <div class="item__title">Multi-category support</div>
+            <div class="item__desc">Currently you can filter to one Featurebase category. Multi-product orgs want to show 2+ categories or all-of-the-above.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--improved">IMPROVED</span>
+          <div class="item__body">
+            <div class="item__title">Better empty + error states</div>
+            <div class="item__desc">If your Featurebase has no recent changelog entries, Loop should say so gracefully. If the API key revokes, customers should see a clean "this card is being updated" message — not a broken canvas.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ─── PLANNED ─── -->
+    <section class="roadmap-section">
+      <h2><span class="section-pill section-pill--planned">Planned</span> Pro tier candidates</h2>
+      <p class="sub">Features being designed for the future Pro tier ($19-29/mo per workspace). Existing Free users will be grandfathered.</p>
+      <ul class="item-list">
+        <li class="item">
+          <span class="item__type type--planned">PLANNED</span>
+          <div class="item__body">
+            <div class="item__title">Custom branding (your colors, your logo)</div>
+            <div class="item__desc">Replace Loop's coral with your brand's colors. Add your logo to the card header. For agencies and customers who want white-label.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--planned">PLANNED</span>
+          <div class="item__body">
+            <div class="item__title">Segment targeting</div>
+            <div class="item__desc">Show different Loop content to different Intercom segments. Pro plan users see "Coming next" items relevant to their tier; trial users see "what shipped that you might love."</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--planned">PLANNED</span>
+          <div class="item__body">
+            <div class="item__title">Multi-source integrations</div>
+            <div class="item__desc">Loop becomes the customer-facing roadmap layer across PM tools — Linear, Productboard, Notion, Trello. Pull from any source, render with Loop's familiar Intercom-native UI.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ─── EXPLORING ─── -->
+    <section class="roadmap-section">
+      <h2><span class="section-pill section-pill--exploring">Exploring</span> Wild ideas</h2>
+      <p class="sub">Ideas we're thinking about but haven't committed to. Feedback shapes which of these get built.</p>
+      <ul class="item-list">
+        <li class="item">
+          <span class="item__type type--research">EXPLORING</span>
+          <div class="item__body">
+            <div class="item__title">Conversation triggers</div>
+            <div class="item__desc">Pattern-match Messenger conversation text to changelog/roadmap items. When customer asks "is X fixed?", auto-surface the relevant FB item inline before your support team responds. The "wow" feature.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--research">EXPLORING</span>
+          <div class="item__body">
+            <div class="item__title">Search within Loop</div>
+            <div class="item__desc">Inline search across your changelog from inside the Messenger. Customers can type to filter without opening a new tab.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--research">EXPLORING</span>
+          <div class="item__body">
+            <div class="item__title">Localization (i18n)</div>
+            <div class="item__desc">Featurebase supports multiple locales per entry. Loop should detect the customer's Intercom locale and render in their language.</div>
+          </div>
+        </li>
+        <li class="item">
+          <span class="item__type type--research">EXPLORING</span>
+          <div class="item__body">
+            <div class="item__title">Public uptime dashboard</div>
+            <div class="item__desc">For enterprise customers who need to see Loop's reliability before installing. Daily uptime numbers, incident history.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <p style="margin-top: 64px; padding-top: 32px; border-top: 1px solid var(--ink-200); color: var(--muted); font-size: 0.9rem;">
+      Updated: <strong>2026-06-01</strong> · Loop is built by <a href="/" style="color: var(--coral-600); font-weight: 600;">GrindWorks Digital</a>. Have a question or feature request? Email <a href="mailto:support@kbpulse.com" style="color: var(--coral-600); font-weight: 600;">support@kbpulse.com</a>.
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <div>© <span id="year">2026</span> Loop. All rights reserved.</div>
+        <div><a href="/website/terms.html">Terms</a> · <a href="/website/privacy.html">Privacy</a> · <a href="/website/docs.html">Docs</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>
