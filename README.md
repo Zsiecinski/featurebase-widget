@@ -199,7 +199,9 @@ Proprietary. © Loop authors. Not for redistribution.
 
 ## Further reading
 
-- [`PROJECT_STATE.md`](./PROJECT_STATE.md) — canonical project status
+- [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md) — **step-by-step guide from current state to live on the App Store**
+- [`PROJECT_STATE.md`](./PROJECT_STATE.md) — canonical project status, branch architecture, gotchas
+- [`CHANGELOG.md`](./CHANGELOG.md) — what shipped per release
 - [`MULTI_TENANT_ROADMAP.md`](./MULTI_TENANT_ROADMAP.md) — multi-tenant phase tracker *(on `multi-tenant` branch)*
 - [`APP_STORE_LISTING.md`](./APP_STORE_LISTING.md) — App Store submission copy *(on `multi-tenant` branch)*
 - [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) — full privacy template *(on `multi-tenant` branch)*
