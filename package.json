@@ -1,8 +1,8 @@
 {
-  "name": "featurebase-intercom",
-  "version": "0.1.0",
+  "name": "loop-app",
+  "version": "1.0.0",
   "private": true,
-  "description": "Intercom Canvas Kit Messenger app that surfaces the Featurebase 'Done' roadmap column.",
+  "description": "Loop — Intercom Canvas Kit app that surfaces a workspace's Featurebase changelog and roadmap inside the Messenger.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -15,6 +15,7 @@
     "db:migrate": "node scripts/db-migrate.mjs"
   },
   "dependencies": {
+    "@sentry/node": "^10.55.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "postgres": "^3.4.4"

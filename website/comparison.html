@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loop vs linking to your changelog — Loop</title>
+  <meta name="description" content="Why a Canvas Kit card inside Intercom Messenger beats a link to your Featurebase changelog page.">
+  <link rel="canonical" href="https://loop.kbpulse.com/website/comparison.html">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/website/styles.css">
+  <style>
+    .comparison-page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 64px 24px 96px;
+    }
+    .comparison-page h1 {
+      font-size: 3rem;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+      margin-bottom: 12px;
+      line-height: 1.05;
+    }
+    .comparison-page h1 .accent {
+      background: linear-gradient(135deg, var(--coral-500), var(--coral-600));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .lead {
+      font-size: 1.2rem;
+      color: var(--muted);
+      max-width: 700px;
+      margin-bottom: 48px;
+      line-height: 1.55;
+    }
+    .comparison-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--surface);
+      border: 1px solid var(--ink-200);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 48px;
+      box-shadow: 0 8px 24px rgba(15,23,42,0.05);
+    }
+    .comparison-table thead th {
+      background: var(--ink-900);
+      color: white;
+      padding: 18px 22px;
+      text-align: left;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .comparison-table thead th.col-loop {
+      background: linear-gradient(135deg, var(--coral-500), var(--coral-600));
+    }
+    .comparison-table tbody tr {
+      border-bottom: 1px solid var(--ink-100);
+    }
+    .comparison-table tbody tr:last-child { border-bottom: none; }
+    .comparison-table td {
+      padding: 18px 22px;
+      vertical-align: top;
+      font-size: 0.95rem;
+      line-height: 1.55;
+    }
+    .comparison-table td.criteria {
+      font-weight: 700;
+      color: var(--ink-900);
+      width: 28%;
+    }
+    .comparison-table td.changelog {
+      color: var(--ink-700);
+      width: 36%;
+    }
+    .comparison-table td.loop {
+      color: var(--ink-700);
+      width: 36%;
+      background: var(--coral-50);
+    }
+    .comparison-table .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: white;
+      margin-bottom: 6px;
+    }
+    .badge--win { background: var(--coral-500); }
+    .badge--neutral { background: var(--ink-500); }
+    .badge--loss { background: #94A3B8; }
+    .scenario {
+      background: var(--surface);
+      border: 1px solid var(--ink-200);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+    .scenario h3 {
+      font-size: 1.15rem;
+      letter-spacing: -0.01em;
+      margin-bottom: 10px;
+      color: var(--ink-900);
+    }
+    .scenario p {
+      color: var(--ink-700);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .scenario .quote {
+      font-style: italic;
+      color: var(--coral-700);
+      border-left: 3px solid var(--coral-400);
+      padding-left: 14px;
+      margin: 14px 0;
+    }
+    .cta-block {
+      background: linear-gradient(135deg, var(--coral-500), var(--coral-600));
+      color: white;
+      padding: 40px;
+      border-radius: 16px;
+      margin-top: 56px;
+      text-align: center;
+    }
+    .cta-block h2 {
+      font-size: 1.85rem;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      color: white;
+    }
+    .cta-block p {
+      font-size: 1.05rem;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 22px;
+      line-height: 1.55;
+    }
+    .cta-block .btn {
+      display: inline-block;
+      background: white;
+      color: var(--coral-600);
+      padding: 12px 26px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      text-decoration: none;
+    }
+    @media (max-width: 700px) {
+      .comparison-page h1 { font-size: 2.25rem; }
+      .comparison-table { font-size: 0.85rem; }
+      .comparison-table td { padding: 12px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a href="/" class="brand">
+        <img src="/assets/logo.svg" alt="Loop">
+        Loop
+      </a>
+      <nav class="site-nav">
+        <a href="/#features">Features</a>
+        <a href="/website/roadmap.html">Roadmap</a>
+        <a href="/website/docs.html">Docs</a>
+        <a class="btn btn-primary" href="https://www.intercom.com/app-store">Install on Intercom</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="comparison-page">
+    <h1>Loop vs. <span class="accent">linking to your changelog</span></h1>
+    <p class="lead">You could just paste your Featurebase URL into Intercom's Messenger as a help link. Most teams already do. Here's why a Canvas Kit card outperforms a link in every metric we've measured.</p>
+
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Criteria</th>
+          <th class="col-changelog">Linking to your changelog page</th>
+          <th class="col-loop">Loop card on Messenger Home</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="criteria">Customer effort to discover</td>
+          <td class="changelog"><span class="badge badge--loss">Low discovery</span> Customer has to know the link exists, click it, wait for a separate tab to load.</td>
+          <td class="loop"><span class="badge badge--win">Zero effort</span> First thing customers see when they open the Messenger. No second tab.</td>
+        </tr>
+        <tr>
+          <td class="criteria">Visual emphasis</td>
+          <td class="changelog"><span class="badge badge--loss">Text link</span> Lost in a wall of help articles. Looks the same as every other link.</td>
+          <td class="loop"><span class="badge badge--win">Color-coded card</span> NEW / IMPROVED / FIXED pills make individual updates stand out. Customers scan at a glance.</td>
+        </tr>
+        <tr>
+          <td class="criteria">Content freshness</td>
+          <td class="changelog"><span class="badge badge--neutral">As fresh as the link</span> The page is current — but customers have to visit it to see anything has changed.</td>
+          <td class="loop"><span class="badge badge--win">Surfaces the change</span> Loop refreshes every time a customer opens the Messenger. New items appear automatically.</td>
+        </tr>
+        <tr>
+          <td class="criteria">Mobile experience</td>
+          <td class="changelog"><span class="badge badge--loss">Page load + zoom</span> Customers on mobile leave the Messenger to read your changelog, possibly losing chat context.</td>
+          <td class="loop"><span class="badge badge--win">Native to chat</span> Card renders inline. Tap to expand. No page load, no zoom, no context loss.</td>
+        </tr>
+        <tr>
+          <td class="criteria">Ticket deflection</td>
+          <td class="changelog"><span class="badge badge--loss">Unmeasurable</span> No way to know if the link prevented a ticket.</td>
+          <td class="loop"><span class="badge badge--win">Track engagement</span> Loop Analytics (coming Q3) shows which items got clicked and how often — measurable deflection rate.</td>
+        </tr>
+        <tr>
+          <td class="criteria">Coming-next visibility</td>
+          <td class="changelog"><span class="badge badge--loss">Hidden</span> Featurebase has a separate roadmap page. Customers have to know it exists and visit it.</td>
+          <td class="loop"><span class="badge badge--win">Inline section</span> Optional "Coming next" section surfaces in-progress items with upvote counts, right under shipped items.</td>
+        </tr>
+        <tr>
+          <td class="criteria">Setup time</td>
+          <td class="changelog"><span class="badge badge--neutral">5 minutes</span> Add a custom help link in Intercom, paste URL.</td>
+          <td class="loop"><span class="badge badge--neutral">2 minutes</span> Install from App Store, paste API key, done. No code.</td>
+        </tr>
+        <tr>
+          <td class="criteria">Customizable per workspace</td>
+          <td class="changelog"><span class="badge badge--loss">No</span> One URL serves every customer. Can't filter by product or audience.</td>
+          <td class="loop"><span class="badge badge--win">Yes</span> Filter by Featurebase category, toggle Coming Next, customize header text and footer button per workspace.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 style="font-size: 1.8rem; letter-spacing: -0.03em; font-weight: 800; margin-bottom: 24px;">Three scenarios where Loop wins decisively</h2>
+
+    <div class="scenario">
+      <h3>1. The "is this fixed yet?" ticket</h3>
+      <p>Customer hits a bug, you ship the fix two weeks later, customer doesn't know. They open Intercom: "Is the size chart bug fixed?"</p>
+      <p class="quote">"With a link to our changelog, they'd never find that out. With Loop, the first thing they see when they open the Messenger is 'FIXED · Size chart bug · 3 days ago.' Half those tickets vanish before they're typed."</p>
+    </div>
+
+    <div class="scenario">
+      <h3>2. The "are you ever going to add X?" question</h3>
+      <p>You have X on your roadmap. Customer doesn't know. They ask, you respond, they wait, you ship — but they've already churned to a competitor.</p>
+      <p class="quote">"Loop's Coming Next section tells them X is coming, before they ask. Customers who see active development on what they care about don't churn."</p>
+    </div>
+
+    <div class="scenario">
+      <h3>3. The "I had no idea you shipped that!" missed-value moment</h3>
+      <p>You launched a major feature. You posted about it on Twitter, sent an email blast, updated your docs. Most existing customers still don't know.</p>
+      <p class="quote">"Email open rates are ~30%. Loop's render rate is ~100% — every customer who opens the Messenger sees what you shipped. It's the most reliable surface to announce wins."</p>
+    </div>
+
+    <h2 style="font-size: 1.8rem; letter-spacing: -0.03em; font-weight: 800; margin: 56px 0 16px;">When linking is actually fine</h2>
+    <p style="color: var(--ink-700); line-height: 1.6; margin-bottom: 18px;">We're not going to pretend Loop is always the right answer. Stick with a link if:</p>
+    <ul style="color: var(--ink-700); padding-left: 24px; line-height: 1.7; margin-bottom: 32px;">
+      <li>You publish to your changelog less than once a month — there's not enough fresh content to warrant a card</li>
+      <li>Your Intercom plan doesn't support Canvas Kit Messenger apps (rare, but a few legacy plans don't)</li>
+      <li>Your changelog content isn't customer-facing — it's internal release notes for engineers</li>
+    </ul>
+    <p style="color: var(--ink-700); line-height: 1.6;">For everyone else: Loop deflects "is this fixed?" tickets, drives upvotes on your roadmap, and turns the Messenger into your highest-converting changelog surface.</p>
+
+    <div class="cta-block">
+      <h2>Try Loop free</h2>
+      <p>Install in 2 minutes. Free during early access. Uninstall any time.</p>
+      <a href="https://www.intercom.com/app-store" class="btn">Install on Intercom →</a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <div>© <span id="year">2026</span> Loop. All rights reserved.</div>
+        <div><a href="/website/terms.html">Terms</a> · <a href="/website/privacy.html">Privacy</a> · <a href="/website/docs.html">Docs</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>

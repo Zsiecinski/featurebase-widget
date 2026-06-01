@@ -7,6 +7,63 @@ The Staytuned-internal single-tenant version (the `main` branch deploy
 at `featurebase-widget-production.up.railway.app`) shares all features
 listed here except where noted "multi-tenant only".
 
+## [1.0.0] — 2026-06-01 — Public launch
+
+First version submitted to the Intercom App Store. Available as **Free**
+during early access. Pro tier planned for Q3 2026.
+
+### Added
+- Custom domain `loop.kbpulse.com` with SSL via Railway
+- Per-workspace event tracking covering install / configure / render /
+  click / uninstall lifecycle, written to `tenant_events` table
+- `GET /admin/analytics/:workspace_id` endpoint that aggregates events
+  into headline metrics (cards rendered, item clicks, click-through
+  rate, top 5 clicked items, install/uninstall counts) for a
+  configurable time window (`?days=N`, max 365)
+- HTML version of the analytics endpoint (`?format=html` or
+  `Accept: text/html`) with KPI cards and top-items table for quick
+  ops visibility
+- Public roadmap page at `/website/roadmap.html` (Shipped / In progress
+  / Planned / Exploring sections, color-coded to match the Canvas
+  Kit card UI)
+- Marketing comparison page at `/website/comparison.html`
+  ("Loop vs linking to your changelog page")
+- Live interactive demo at `/website/demo.html` (loads Intercom
+  Messenger in anonymous visitor mode for video recording)
+- Five App Store screenshot templates at `/website/mockups.html` with
+  one-click PNG export via html-to-image
+- Operator-facing docs: `LAUNCH_CHECKLIST.md`, `LAUNCH_ANNOUNCEMENTS.md`
+  (6-channel launch copy), `OUTREACH_TARGETS.md` (cold-email tracker
+  template), `SUPPORT_RESPONSES.md` (10 pre-written reply templates)
+- Documentation expansion: "Loop needs setup" troubleshooting, install
+  error catalog, and 6-question FAQ covering OAuth scopes,
+  private changelogs, expired keys, API rate impact, multi-workspace
+  usage, and i18n status
+- `@sentry/node` as a real dependency (was optional/console-only before)
+
+### Changed
+- `package.json` name: `featurebase-intercom` → `loop-app`
+- `package.json` version: 0.1.0 → 1.0.0
+- App description: now references Loop's branding throughout
+
+### Fixed
+- **OAuth workspace_id resolution**: Intercom's token endpoint returns
+  only `{token, access_token, token_type}` — no `app_id`. Previous code
+  expected workspace ID on the token response, causing every install
+  to fail with "Token response missing access_token or workspace_id".
+  Now derives workspace ID from the follow-up `/me` call.
+- Privacy policy now documents Intercom's platform-required Canvas Kit
+  scopes (Read users, Read conversations, Read companies) and clarifies
+  that Loop's code never calls those endpoints — only `/me` for
+  installing admin email.
+
+### Operational notes
+- Event log writes are fire-and-forget — never delay Canvas Kit
+  responses, gracefully no-op when DB unavailable
+- `last_used_at` auto-updates on render and click events
+- Old single-tenant Railway URL still resolves but all listing /
+  Intercom Dev Hub URLs point at `loop.kbpulse.com`
+
 ## [Unreleased] — App Store v1 prep
 
 ### Added
