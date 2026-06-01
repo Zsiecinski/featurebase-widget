@@ -144,9 +144,12 @@
 
       <h4>Troubleshooting</h4>
       <ul>
+        <li><a href="#needs-setup">"Loop needs setup"</a></li>
         <li><a href="#empty">My card is empty</a></li>
         <li><a href="#cache">Changes don't show up</a></li>
         <li><a href="#hidden-entries">Hidden entries</a></li>
+        <li><a href="#install-errors">Install errors</a></li>
+        <li><a href="#faq">FAQ</a></li>
       </ul>
 
       <h4>Reference</h4>
@@ -239,6 +242,21 @@
 
       <!-- ─── Troubleshooting ─── -->
       <section>
+        <h2 id="needs-setup">My card shows "Loop needs setup"</h2>
+        <p>Two possible causes:</p>
+
+        <h3>1. Featurebase API key hasn't been saved</h3>
+        <p>Open the Configure form (Messenger settings → Home space → Loop → Settings). The Featurebase API key field should already be filled. If it's blank, paste your <code>fb_live_...</code> key and click Save settings.</p>
+
+        <h3>2. The API key was rejected during validation</h3>
+        <p>Loop validates your API key by making a live Featurebase request before saving. Common causes of rejection:</p>
+        <ul>
+          <li>Typo in the key (extra space, missing character)</li>
+          <li>Key revoked or rotated in Featurebase since last save</li>
+          <li>Featurebase plan doesn't include API access (most paid plans do; free trials may not)</li>
+        </ul>
+        <p>Generate a fresh key at Featurebase → Settings → API and paste it again.</p>
+
         <h2 id="empty">My Loop card is empty</h2>
         <p>The most common causes, in order of likelihood:</p>
 
@@ -271,6 +289,45 @@
         </ul>
 
         <p>Segment restrictions (<code>allowedSegmentIds</code>) are intentionally <strong>not</strong> enforced — Loop's stance is to show what was shipped to all viewers, since we can't reliably map Intercom users to Featurebase segments.</p>
+
+        <h2 id="install-errors">Install errors</h2>
+
+        <h3>"redirect_uri_mismatch" during OAuth install</h3>
+        <p>Intercom's Dev Hub saved redirect URL doesn't exactly match the redirect URI Loop is requesting. Usually a trailing slash or http/https mismatch. If you're the installer, this is on Loop's side — email <a href="mailto:support@kbpulse.com">support@kbpulse.com</a> with a screenshot of the error URL.</p>
+
+        <h3>"App is not installable" or similar Intercom error</h3>
+        <p>Your Intercom workspace plan may not support third-party Messenger apps. Loop requires a plan tier that allows Canvas Kit apps on Messenger Home — check with your Intercom admin.</p>
+
+        <h3>Configure form opens but doesn't include Featurebase fields</h3>
+        <p>This shouldn't happen in normal use. If it does, the most likely cause is that you're seeing a stale cached version of the form. Try:</p>
+        <ol>
+          <li>Hard-refresh the Messenger settings page (Ctrl+Shift+R)</li>
+          <li>Uninstall + reinstall Loop in your workspace</li>
+          <li>Email support if it persists</li>
+        </ol>
+
+        <h3>Card shows but clicking items does nothing</h3>
+        <p>If Loop renders the list but tapping an item doesn't open the detail view, you're likely on a cached old Canvas Kit version. Wait 30 minutes for Intercom's cache to expire, or hard-refresh the page where the Messenger loads.</p>
+
+        <h2 id="faq">FAQ</h2>
+
+        <h3>Does Loop read my Intercom conversations or contact data?</h3>
+        <p>No. Intercom's Canvas Kit platform auto-grants apps four read-access scopes that cannot be deselected (Read users, Read companies, Read conversations, Gather App data) — but Loop's source code never calls those endpoints. The only Intercom API call Loop ever makes is <code>/me</code> once during install, to fetch the installing admin's email for support contact. See our <a href="/website/privacy.html">privacy policy</a> for the full disclosure.</p>
+
+        <h3>Can I use Loop with a private Featurebase changelog?</h3>
+        <p>Loop reads from your Featurebase API using your API key, so it can technically render entries that aren't on your public changelog board. However, by default Loop respects the <em>Hide from changelog board / widget embeds</em> flag, so hidden entries stay hidden in Loop too.</p>
+
+        <h3>What happens if my Featurebase plan changes or my key expires?</h3>
+        <p>Loop will fall back to a "this card is being updated" state and stop rendering until you update the key. We don't currently send an email alert when this happens — that's planned for a future release. For now, check Loop's card periodically if you change Featurebase plans.</p>
+
+        <h3>How many Featurebase API requests does Loop make?</h3>
+        <p>Loop makes one Featurebase API call per Messenger session that opens Loop's card — typically one or two calls per customer interaction. We do not poll Featurebase in the background. If you're worried about hitting Featurebase rate limits, our load is light: typically &lt; 100 calls per workspace per day in steady state.</p>
+
+        <h3>Can I install Loop on multiple Intercom workspaces with one Featurebase account?</h3>
+        <p>Yes. Each Intercom workspace stores its own Loop config (Featurebase API key, category filter, display options). You can use the same Featurebase API key across multiple workspaces.</p>
+
+        <h3>Is Loop available in languages other than English?</h3>
+        <p>Loop's own UI labels are English-only at launch. The content Loop displays (your changelog entries) renders in whatever language they're written in Featurebase. Localization (i18n) for the card chrome itself is on the <a href="/website/roadmap.html">roadmap</a>.</p>
       </section>
 
       <!-- ─── Reference ─── -->
