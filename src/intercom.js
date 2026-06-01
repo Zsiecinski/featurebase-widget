@@ -76,16 +76,7 @@ export async function exchangeCodeForToken(code) {
     const txt = await r.text();
     throw new Error(`Intercom token exchange failed: ${r.status} ${txt}`);
   }
-  // TEMP DIAGNOSTIC: capture raw response shape to debug OAuth install.
-  // Remove after Phase C install test passes.
-  const rawText = await r.text();
-  console.log('[oauth-debug] status:', r.status, 'content-type:', r.headers.get('content-type'));
-  console.log('[oauth-debug] raw body:', rawText.slice(0, 500));
-  try {
-    return JSON.parse(rawText);
-  } catch (e) {
-    throw new Error(`Intercom returned non-JSON body: ${rawText.slice(0, 200)}`);
-  }
+  return r.json(); // { token, access_token, token_type } — no workspace info
 }
 
 // Fetches the installing admin's profile from Intercom (for support contact)

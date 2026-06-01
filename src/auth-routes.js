@@ -44,12 +44,17 @@ export function registerAuthRoutes(app) {
     try {
       const tokenResp = await exchangeCodeForToken(code);
       const accessToken = tokenResp.token || tokenResp.access_token;
-      const workspaceId =
-        tokenResp.app_id || tokenResp.workspace_id || tokenResp.app?.id_code;
-      if (!accessToken || !workspaceId) {
-        throw new Error('Token response missing access_token or workspace_id');
+      if (!accessToken) {
+        throw new Error('Token response missing access_token');
       }
-      const me = await fetchInstaller(accessToken).catch(() => null);
+      // Intercom's token endpoint returns only {token, access_token, token_type}.
+      // Workspace ID has to come from /me — which also surfaces the installing
+      // admin's email for support contact.
+      const me = await fetchInstaller(accessToken);
+      const workspaceId = me?.app?.id_code || me?.app_id;
+      if (!workspaceId) {
+        throw new Error('Could not resolve workspace_id from /me response');
+      }
       if (dbAvailable()) {
         await upsertTenantOnInstall({
           workspaceId,
