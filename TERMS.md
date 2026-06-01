@@ -1,13 +1,10 @@
 # Terms of Service
 
-**Last updated: [DATE BEFORE PUBLISHING]**
+**Last updated: 2026-06-01**
 
 These Terms of Service ("Terms") govern your access to and use of Loop
-(the "Service"), provided by `[YOUR COMPANY NAME]` ("we", "our", "us").
+(the "Service"), provided by GrindWorks Digital ("we", "our", "us").
 By installing or using Loop, you agree to these Terms.
-
-> Before publishing: fill in the placeholders and have a lawyer review
-> for your specific jurisdiction. This template is a starting point.
 
 ## 1. Eligibility
 
@@ -48,24 +45,14 @@ You agree not to:
 
 ## 5. Fees and payment
 
-[CHOOSE ONE BLOCK BELOW]
-
-### Option A — Free
-
 Loop is currently provided free of charge. We reserve the right to
-introduce fees in the future with at least 30 days' notice.
-
-### Option B — Paid
-
-Loop costs `[PRICE]` per `[BILLING UNIT]`, billed through Intercom's
-billing system. Fees are non-refundable except as required by law.
-Refunds for billing errors will be processed within 30 days of
-notification.
+introduce fees in the future with at least 30 days' notice to installing
+admins.
 
 ## 6. Intellectual property
 
 Loop, including all software, designs, logos, and content, is owned by
-`[YOUR COMPANY NAME]` and protected by intellectual property laws. You
+GrindWorks Digital and protected by intellectual property laws. You
 receive a limited, non-exclusive, non-transferable license to use Loop
 in accordance with these Terms.
 
@@ -94,8 +81,8 @@ SECURE, OR FREE OF VIRUSES OR HARMFUL COMPONENTS.
 
 ## 9. Limitation of liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL `[YOUR COMPANY
-NAME]` BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL,
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL GRINDWORKS
+DIGITAL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL,
 OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER
 INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR
 OTHER INTANGIBLE LOSSES.
@@ -133,9 +120,9 @@ the effective date constitutes acceptance.
 
 ## 13. Governing law and disputes
 
-These Terms are governed by the laws of `[YOUR JURISDICTION]`, without
+These Terms are governed by the laws of Missouri, USA, without
 regard to conflict-of-law principles. Any disputes will be resolved
-exclusively in the courts of `[YOUR JURISDICTION]`, except for claims
+exclusively in the courts of Missouri, USA, except for claims
 that may be brought in small-claims court.
 
 ## 14. Miscellaneous
@@ -150,6 +137,6 @@ that may be brought in small-claims court.
 
 ## 15. Contact
 
-`[YOUR CONTACT EMAIL]`
-`[YOUR COMPANY NAME]`
-`[YOUR ADDRESS]`
+support@kbpulse.com
+GrindWorks Digital
+Missouri, USA

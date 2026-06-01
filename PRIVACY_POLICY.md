@@ -1,16 +1,11 @@
 # Privacy Policy
 
-**Last updated: [DATE BEFORE PUBLISHING]**
+**Last updated: 2026-06-01**
 
 This Privacy Policy describes how Loop ("we", "our", "us") collects, uses,
 and discloses information when you use our Intercom Canvas Kit app
-("Loop", the "Service"). By installing or using Loop, you agree to the
-practices described here.
-
-> Before publishing: replace `[YOUR COMPANY NAME]`, `[YOUR CONTACT EMAIL]`,
-> `[YOUR JURISDICTION]`, and `[DATE]` placeholders. Have a lawyer review
-> for your specific jurisdiction. This template is a starting point, not
-> legal advice.
+("Loop", the "Service"). Loop is operated by GrindWorks Digital. By
+installing or using Loop, you agree to the practices described here.
 
 ## 1. Information we collect
 
@@ -78,7 +73,7 @@ Loop is hosted on Railway. Our database is hosted on Railway Postgres.
   your workspace, plus 90 days after uninstall to allow easy reinstallation.
 - Server logs are retained for 30 days.
 - You may request immediate deletion of all your data by emailing
-  `[YOUR CONTACT EMAIL]`. We will confirm deletion within 7 days.
+  `support@kbpulse.com`. We will confirm deletion within 7 days.
 
 ## 5. Security
 
@@ -106,14 +101,14 @@ Depending on your location, you may have rights to:
 - Receive your data in a portable format
 - Withdraw consent at any time
 
-Email `[YOUR CONTACT EMAIL]` to exercise these rights. We will respond
+Email `support@kbpulse.com` to exercise these rights. We will respond
 within 30 days.
 
 ## 7. International transfers
 
-Loop is operated from `[YOUR JURISDICTION]`. If you access Loop from
-outside `[YOUR JURISDICTION]`, your data may be transferred to, stored
-in, and processed in `[YOUR JURISDICTION]`. We rely on standard
+Loop is operated from Missouri, USA. If you access Loop from
+outside Missouri, USA, your data may be transferred to, stored
+in, and processed in Missouri, USA. We rely on standard
 contractual clauses or equivalent safeguards where required.
 
 ## 8. Children's privacy
@@ -133,6 +128,6 @@ acceptance of the updated policy.
 
 For questions about this policy or to exercise your rights:
 
-`[YOUR CONTACT EMAIL]`
-`[YOUR COMPANY NAME]`
-`[YOUR ADDRESS]`
+support@kbpulse.com
+GrindWorks Digital
+Missouri, USA

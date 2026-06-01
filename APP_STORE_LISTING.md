@@ -131,10 +131,12 @@ if data supports it.
 
 ## Support details
 
-- **Support email**: `support@loop-app.example` (set up a forwarder before submitting)
-- **Documentation URL**: `https://loop-app.example/docs` (single-page docs is enough)
-- **Privacy policy URL**: `https://loop-app.example/privacy` (see PRIVACY_POLICY.md template)
-- **Terms of service URL**: `https://loop-app.example/terms` (see TERMS.md template)
+- **Support email**: `support@kbpulse.com`
+- **Documentation URL**: `https://loop.kbpulse.com/website/docs.html`
+- **Privacy policy URL**: `https://loop.kbpulse.com/website/privacy.html`
+- **Terms of service URL**: `https://loop.kbpulse.com/website/terms.html`
+- **Website URL**: `https://loop.kbpulse.com/`
+- **Built by**: GrindWorks Digital (Missouri, USA)
 
 ## Screenshots required (5 images, 1280×800 or 2560×1600)
 

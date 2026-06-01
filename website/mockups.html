@@ -3,266 +3,981 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Loop — Mockups for screenshots</title>
+  <title>Loop — App Store screenshots</title>
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-  <link rel="stylesheet" href="/website/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js"></script>
+
   <style>
-    /* This page is for taking branded screenshots for the App Store listing.
-       Each mockup is rendered at 2560x1600 hidpi if you screenshot the
-       individual <figure> at retina scale. The CSS messenger-mock from
-       styles.css is reused as the base. */
-    body { background: linear-gradient(135deg, #FFE4E6 0%, #FFF1F2 100%); padding: 64px 0; }
-    @media (prefers-color-scheme: dark) {
-      body { background: linear-gradient(135deg, #1E1B4B 0%, #0F0A2E 100%); }
+    /* =====================================================
+       LOOP — APP STORE SCREENSHOT TEMPLATES
+       Each .shot is exactly 1600x1000. Capture by:
+       1. Open this page in Chrome
+       2. DevTools (F12) → Cmd+Shift+P → "Capture node screenshot"
+       3. Click the .shot you want → Chrome saves it 1600x1000 PNG
+       OR use Lightshot to capture the rendered shot at any zoom.
+       ===================================================== */
+
+    :root {
+      --coral-50:  #FFF1F2;
+      --coral-100: #FFE4E6;
+      --coral-300: #FDA4AF;
+      --coral-400: #FB7185;
+      --coral-500: #F43F5E;
+      --coral-600: #E11D48;
+      --coral-700: #BE123C;
+
+      --ink-100: #F1F5F9;
+      --ink-200: #E2E8F0;
+      --ink-300: #CBD5E1;
+      --ink-400: #94A3B8;
+      --ink-500: #64748B;
+      --ink-700: #334155;
+      --ink-900: #0F172A;
     }
-    .shot-grid {
-      max-width: 1200px;
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+    body {
+      background: #0F0A1F;
+      color: white;
+      padding: 48px 24px;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .page-header {
+      max-width: 1600px;
+      margin: 0 auto 48px;
+      text-align: center;
+    }
+    .page-header h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+    .page-header p {
+      color: #A5A5B5;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      max-width: 700px;
       margin: 0 auto;
-      padding: 0 24px;
+    }
+    .page-header code {
+      background: #1F1A2E;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: #F0F0F5;
+    }
+
+    .shot-list {
+      max-width: 1600px;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 96px;
+      gap: 64px;
     }
+
+    .shot-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #6B6680;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .download-btn {
+      background: #F43F5E;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s;
+      box-shadow: 0 4px 12px rgba(244,63,94,0.35);
+    }
+    .download-btn:hover { background: #E11D48; }
+    .download-btn:active { transform: translateY(1px); }
+    .download-btn:disabled {
+      background: #4A4459;
+      color: #8B8599;
+      cursor: wait;
+      box-shadow: none;
+    }
+    .download-all-btn {
+      background: #10B981;
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(16,185,129,0.4);
+      margin-top: 18px;
+    }
+    .download-all-btn:hover { background: #059669; }
+    .download-all-btn:disabled { background: #4A4459; cursor: wait; }
+
+    /* ─── EACH .shot IS EXACTLY 1600x1000 ─── */
     .shot {
+      width: 1600px;
+      height: 1000px;
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* ─── SHOT VARIATIONS (backgrounds) ─── */
+    .shot--hero {
+      background:
+        radial-gradient(ellipse at top right, rgba(255,228,230,0.35) 0%, transparent 60%),
+        radial-gradient(ellipse at bottom left, rgba(244,63,94,0.25) 0%, transparent 60%),
+        linear-gradient(135deg, #F43F5E 0%, #BE123C 100%);
+    }
+    .shot--detail {
+      background:
+        radial-gradient(circle at 80% 30%, rgba(253,164,175,0.3) 0%, transparent 50%),
+        linear-gradient(160deg, #FB7185 0%, #E11D48 60%, #9F1239 100%);
+    }
+    .shot--next {
+      background:
+        radial-gradient(circle at 20% 80%, rgba(251,113,133,0.4) 0%, transparent 50%),
+        linear-gradient(135deg, #4C0519 0%, #BE123C 70%, #F43F5E 100%);
+    }
+    .shot--configure {
+      background:
+        radial-gradient(circle at 70% 20%, rgba(244,63,94,0.3) 0%, transparent 60%),
+        linear-gradient(150deg, #1E293B 0%, #334155 50%, #BE123C 100%);
+    }
+    .shot--badges {
+      background:
+        linear-gradient(135deg, #FFE4E6 0%, #FFF1F2 50%, #FDA4AF 100%);
+      color: var(--ink-900);
+    }
+
+    /* ─── DECORATIVE DOTS PATTERN ─── */
+    .shot::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.15) 1.5px, transparent 1.5px);
+      background-size: 32px 32px;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .shot--badges::before {
+      background-image: radial-gradient(circle, rgba(244,63,94,0.18) 1.5px, transparent 1.5px);
+    }
+
+    .shot__inner {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 64px;
       align-items: center;
-      background: var(--bg);
-      border-radius: var(--radius-xl);
-      padding: 64px;
-      box-shadow: var(--shadow-lg);
+      padding: 0 100px;
+      gap: 80px;
     }
-    @media (max-width: 900px) {
-      .shot { grid-template-columns: 1fr; padding: 32px; gap: 32px; }
-    }
-    .shot--reversed { direction: rtl; }
-    .shot--reversed > * { direction: ltr; }
+    .shot__inner--reversed { direction: rtl; }
+    .shot__inner--reversed > * { direction: ltr; }
 
-    .shot__intro h2 {
-      font-size: 2.5rem;
-      letter-spacing: -0.03em;
-      margin-bottom: 16px;
-      line-height: 1.1;
+    /* ─── TEXT BLOCK ─── */
+    .shot__copy h2 {
+      font-size: 4.5rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.02;
+      color: white;
+      margin-bottom: 28px;
     }
-    .shot__intro h2 .accent {
-      background: linear-gradient(135deg, var(--coral-500), var(--coral-300));
+    .shot--badges .shot__copy h2 { color: var(--ink-900); }
+    .shot__copy h2 .accent {
+      background: linear-gradient(135deg, #FFE4E6 0%, #FECDD3 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      display: inline-block;
+    }
+    .shot--badges .shot__copy h2 .accent {
+      background: linear-gradient(135deg, var(--coral-500) 0%, var(--coral-700) 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
     }
-    .shot__intro p {
-      font-size: 1.15rem;
-      color: var(--muted);
-      line-height: 1.7;
+    .shot__copy p {
+      font-size: 1.4rem;
+      line-height: 1.55;
+      color: rgba(255,255,255,0.88);
+      font-weight: 400;
+      max-width: 560px;
+    }
+    .shot--badges .shot__copy p { color: var(--ink-700); }
+
+    .shot__brand-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 8px 16px;
+      border-radius: 999px;
+      margin-bottom: 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: white;
+    }
+    .shot--badges .shot__brand-tag {
+      background: rgba(244,63,94,0.12);
+      border-color: rgba(244,63,94,0.25);
+      color: var(--coral-700);
+    }
+    .shot__brand-tag .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 0 4px rgba(16,185,129,0.25);
     }
 
+    /* ─── VISUAL / MOCKUP BLOCK ─── */
     .shot__visual {
       display: flex;
       justify-content: center;
       align-items: center;
     }
 
-    /* Wider mockup variant for the detail view */
-    .messenger-mock--detail {
+    /* ─── MESSENGER MOCKUP (Intercom-style) ─── */
+    .msg {
       width: 380px;
-      max-width: 100%;
+      background: white;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow:
+        0 50px 80px -20px rgba(0,0,0,0.5),
+        0 20px 40px -10px rgba(0,0,0,0.3);
+      font-family: 'Inter', sans-serif;
+      color: var(--ink-900);
+      position: relative;
     }
-    .messenger-mock__back {
-      color: var(--coral-600);
-      font-size: 0.875rem;
-      font-weight: 500;
-      margin-bottom: 14px;
-    }
-    .messenger-mock__big-pill {
-      display: inline-block;
-      padding: 6px 16px;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
+    .msg--tall { min-height: 720px; }
+    .msg__topbar {
+      background: #1A1A2E;
+      padding: 16px 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
       color: white;
-      margin-bottom: 16px;
+      font-size: 0.92rem;
+      font-weight: 600;
     }
-    .messenger-mock__big-pill--improved { background: #8B5CF6; }
-    .messenger-mock__big-pill--inprogress { background: #3B82F6; }
-    .messenger-mock__detail-title {
-      font-size: 1.25rem;
-      font-weight: 700;
+    .msg__avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--coral-500);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: white;
+    }
+    .msg__topbar-meta { font-size: 0.7rem; color: #A0A0B0; font-weight: 400; margin-top: 2px; }
+
+    .msg__body { padding: 22px 22px 26px; }
+    .msg__header {
+      font-size: 1.1rem;
+      font-weight: 800;
       letter-spacing: -0.02em;
       color: var(--ink-900);
-      margin-bottom: 6px;
-      line-height: 1.25;
+      margin-bottom: 4px;
     }
-    .messenger-mock__detail-meta {
-      font-size: 0.85rem;
+    .msg__sub {
+      font-size: 0.82rem;
+      color: var(--ink-500);
+      margin-bottom: 18px;
+      line-height: 1.4;
+    }
+
+    .msg__item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--ink-100);
+    }
+    .msg__item:last-of-type { border-bottom: none; }
+    .msg__item-content { flex: 1; min-width: 0; }
+    .msg__item-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--ink-900);
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+    .msg__item-meta {
+      font-size: 0.75rem;
+      color: var(--ink-500);
+    }
+
+    /* PILL BADGES */
+    .pill {
+      display: inline-block;
+      flex-shrink: 0;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: white;
+      margin-top: 2px;
+      min-width: 64px;
+      text-align: center;
+    }
+    .pill--new       { background: #10B981; }
+    .pill--improved  { background: #8B5CF6; }
+    .pill--fixed     { background: #F97316; }
+    .pill--progress  { background: #3B82F6; }
+
+    .msg__cta {
+      margin-top: 18px;
+      padding: 12px;
+      background: var(--coral-500);
+      color: white;
+      text-align: center;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .msg__section {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 2px solid var(--ink-100);
+    }
+    .msg__section .msg__header { margin-top: 0; }
+
+    /* DETAIL VIEW SPECIFICS */
+    .msg__back {
+      color: var(--coral-600);
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .msg__big-pill {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: white;
+      margin-bottom: 14px;
+    }
+    .msg__detail-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--ink-900);
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    .msg__detail-meta {
+      font-size: 0.78rem;
       color: var(--ink-500);
       margin-bottom: 16px;
     }
-    .messenger-mock__divider {
+    .msg__divider {
       height: 1px;
-      background: #F1F5F9;
-      margin: 16px -22px;
+      background: var(--ink-100);
+      margin: 14px -22px;
     }
-    .messenger-mock__body {
-      font-size: 0.92rem;
+    .msg__bh {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--ink-900);
+      margin: 14px 0 6px;
+    }
+    .msg__bb {
+      font-size: 0.85rem;
       color: var(--ink-700);
-      line-height: 1.6;
+      line-height: 1.55;
+    }
+
+    /* CONFIGURE FORM — styled to match Intercom's actual Dev Hub Configure UI */
+    .form-mock {
+      width: 480px;
+      background: #1A1B26;
+      border-radius: 16px;
+      padding: 28px 28px 22px;
+      box-shadow:
+        0 50px 80px -20px rgba(0,0,0,0.6),
+        0 20px 40px -10px rgba(0,0,0,0.4);
+      color: #E5E7EB;
+      border: 1px solid #2E2F3D;
+    }
+    .form-mock .crumb {
+      font-size: 0.78rem;
+      color: #6366F1;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .form-mock h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 4px;
+      color: white;
+    }
+    .form-mock .form-sub {
+      font-size: 0.82rem;
+      color: #9CA3AF;
+      margin-bottom: 22px;
+      line-height: 1.55;
+    }
+    .form-mock .form-section-h {
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: #6B7280;
+      text-transform: uppercase;
+      margin: 18px 0 12px;
+    }
+    .form-mock .field {
+      margin-bottom: 16px;
+    }
+    .form-mock .field label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #D1D5DB;
       margin-bottom: 8px;
     }
-    .messenger-mock__body-h {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--ink-900);
-      margin: 16px 0 8px;
-    }
-
-    /* Coming Next section */
-    .messenger-mock__section-header {
-      font-size: 1.05rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--ink-900);
-      margin-top: 14px;
-    }
-
-    .shot__caption {
-      text-align: center;
-      margin-top: 32px;
+    .form-mock .field .input {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #3F4054;
+      border-radius: 8px;
       font-size: 0.85rem;
-      color: var(--muted);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      color: #E5E7EB;
+      background: #14151E;
     }
+
+    /* Intercom-style segmented Yes/No control */
+    .segment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      background: #14151E;
+      border: 1px solid #3F4054;
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .segment--triple {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    .segment__btn {
+      text-align: center;
+      padding: 7px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #9CA3AF;
+      border-radius: 6px;
+    }
+    .segment__btn--active {
+      background: #3B3FBC;
+      color: white;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    .form-mock .save-btn {
+      width: 100%;
+      margin-top: 18px;
+      padding: 11px;
+      background: #3B3FBC;
+      color: white;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.88rem;
+      border: 1px solid #4549D4;
+    }
+
+    /* BADGES CLOSE-UP (Shot 5) */
+    .badge-trio {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      width: 540px;
+    }
+    .badge-row {
+      background: white;
+      border-radius: 16px;
+      padding: 26px 32px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      box-shadow:
+        0 20px 40px -10px rgba(0,0,0,0.15),
+        0 4px 12px rgba(0,0,0,0.08);
+    }
+    .pill-big {
+      padding: 10px 22px;
+      border-radius: 8px;
+      color: white;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      flex-shrink: 0;
+    }
+    .pill-big--new      { background: #10B981; }
+    .pill-big--improved { background: #8B5CF6; }
+    .pill-big--fixed    { background: #F97316; }
+    .badge-row .badge-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--ink-900);
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .badge-row .badge-text .badge-sub {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--ink-500);
+      font-weight: 400;
+      margin-top: 2px;
+      letter-spacing: 0;
+    }
+
+    /* CAPTURE INSTRUCTIONS BANNER */
+    .capture-banner {
+      max-width: 1600px;
+      margin: 0 auto 32px;
+      padding: 20px 28px;
+      background: #1F1A2E;
+      border: 1px solid #2F2A40;
+      border-radius: 12px;
+      color: #D5D0E5;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .capture-banner strong { color: white; }
+    .capture-banner ol { margin: 8px 0 0 20px; }
+    .capture-banner code { background: #0F0A1F; padding: 2px 6px; border-radius: 4px; color: #FB7185; }
   </style>
 </head>
 <body>
 
-  <div class="shot-grid">
-
-    <!-- ─── Shot 1: Home view, recently shipped ─── -->
-    <figure class="shot">
-      <div class="shot__intro">
-        <h2>See what shipped, <span class="accent">right in chat.</span></h2>
-        <p>Loop renders your Featurebase changelog inside the Intercom Messenger. Customers who open chat to ask about a feature see the answer before they have to type the question.</p>
-      </div>
-      <div class="shot__visual">
-        <div class="messenger-mock">
-          <div class="messenger-mock__inner">
-            <div class="messenger-mock__header">Recently shipped</div>
-            <div class="messenger-mock__sub">Features we just launched. Tap an item for details.</div>
-
-            <div class="messenger-mock__item">
-              <span class="messenger-mock__pill messenger-mock__pill--improved">IMPROVED</span>
-              <div>
-                <div class="messenger-mock__title">Added Theme Support for Size Chart Placement</div>
-                <div class="messenger-mock__meta">Updated Feb 27 · 3 comments</div>
-              </div>
-            </div>
-            <div class="messenger-mock__item">
-              <span class="messenger-mock__pill messenger-mock__pill--fixed">FIXED</span>
-              <div>
-                <div class="messenger-mock__title">Bug Fixes</div>
-                <div class="messenger-mock__meta">Updated Jan 27</div>
-              </div>
-            </div>
-            <div class="messenger-mock__item">
-              <span class="messenger-mock__pill messenger-mock__pill--new">NEW</span>
-              <div>
-                <div class="messenger-mock__title">Recommender Updates</div>
-                <div class="messenger-mock__meta">Updated Jan 27</div>
-              </div>
-            </div>
-
-            <div class="messenger-mock__cta">See full roadmap</div>
-          </div>
-        </div>
-      </div>
-    </figure>
-
-    <!-- ─── Shot 2: Detail / drill-down view ─── -->
-    <figure class="shot shot--reversed">
-      <div class="shot__intro">
-        <h2>Full updates without <span class="accent">leaving Messenger.</span></h2>
-        <p>Tap any item to expand the full update. Title, body, dates — all rendered natively. The "Open on Featurebase" button is there if customers want to comment or upvote.</p>
-      </div>
-      <div class="shot__visual">
-        <div class="messenger-mock messenger-mock--detail">
-          <div class="messenger-mock__inner">
-            <div class="messenger-mock__back">← Back to all</div>
-            <span class="messenger-mock__big-pill messenger-mock__big-pill--improved">IMPROVED</span>
-            <div class="messenger-mock__detail-title">Added Theme Support for Size Chart Placement</div>
-            <div class="messenger-mock__detail-meta">Updated Feb 27 · Kiwi Sizing · 3 comments</div>
-            <div class="messenger-mock__divider"></div>
-
-            <div class="messenger-mock__body-h">What changed</div>
-            <div class="messenger-mock__body">After reviewing the most popular themes used by Kiwi customers, we added support for the Prestige and Impulse themes.</div>
-
-            <div class="messenger-mock__body-h">Why it matters</div>
-            <div class="messenger-mock__body">Merchants can now place the size chart next to the Size header without writing custom code.</div>
-
-            <div class="messenger-mock__cta">Open on Featurebase</div>
-          </div>
-        </div>
-      </div>
-    </figure>
-
-    <!-- ─── Shot 3: Recently shipped + Coming next ─── -->
-    <figure class="shot">
-      <div class="shot__intro">
-        <h2>Anticipate what's <span class="accent">coming next.</span></h2>
-        <p>Optional "Coming next" section surfaces in-progress roadmap items. Loop becomes a habit — customers come back to check what's being built, not just what shipped.</p>
-      </div>
-      <div class="shot__visual">
-        <div class="messenger-mock messenger-mock--detail">
-          <div class="messenger-mock__inner">
-            <div class="messenger-mock__header">Recently shipped</div>
-            <div class="messenger-mock__sub">Features we just launched.</div>
-
-            <div class="messenger-mock__item">
-              <span class="messenger-mock__pill messenger-mock__pill--improved">IMPROVED</span>
-              <div>
-                <div class="messenger-mock__title">Theme Support for Size Chart</div>
-                <div class="messenger-mock__meta">Updated Feb 27</div>
-              </div>
-            </div>
-            <div class="messenger-mock__item">
-              <span class="messenger-mock__pill messenger-mock__pill--new">NEW</span>
-              <div>
-                <div class="messenger-mock__title">Recommender Updates</div>
-                <div class="messenger-mock__meta">Updated Jan 27</div>
-              </div>
-            </div>
-
-            <div class="messenger-mock__divider"></div>
-            <div class="messenger-mock__section-header">Coming next</div>
-            <div class="messenger-mock__sub">What we're actively building.</div>
-
-            <div class="messenger-mock__item">
-              <span class="messenger-mock__pill" style="background:#3B82F6;">IN PROGRESS</span>
-              <div>
-                <div class="messenger-mock__title">AI-powered size recommendations v3</div>
-                <div class="messenger-mock__meta">47 upvotes · 12 comments</div>
-              </div>
-            </div>
-            <div class="messenger-mock__item">
-              <span class="messenger-mock__pill" style="background:#3B82F6;">IN PROGRESS</span>
-              <div>
-                <div class="messenger-mock__title">Bulk size chart editor</div>
-                <div class="messenger-mock__meta">23 upvotes</div>
-              </div>
-            </div>
-
-            <div class="messenger-mock__cta">See full roadmap</div>
-          </div>
-        </div>
-      </div>
-    </figure>
-
-    <p class="shot__caption">Screenshot these mockups at 2x density for the App Store listing.</p>
+  <div class="page-header">
+    <h1>Loop — App Store screenshots</h1>
+    <p>Five branded shots, each rendered at the exact <code>1600 × 1000</code> Intercom requires. Capture each at native size — no resizing needed.</p>
   </div>
+
+  <div class="capture-banner">
+    <strong>One-click PNG export.</strong> Each shot below has a <span style="color:#FB7185">Download PNG</span> button — click it and Chrome saves a 1600×1000 PNG to your Downloads folder, named <code>loop-shot-N-{name}.png</code>. Or click <strong style="color:#10B981">Download all 5</strong> below to grab them in one shot.
+    <button class="download-all-btn" onclick="downloadAll()">⬇ Download all 5 as PNG</button>
+  </div>
+
+  <div class="shot-list">
+
+    <!-- ─────────────────────────────────────────────────────────
+         SHOT 1 — HERO: Recently shipped
+    ───────────────────────────────────────────────────────── -->
+    <div>
+      <div class="shot-label">
+        <span>Shot 1 of 5 — Hero</span>
+        <button class="download-btn" onclick="downloadShot('shot-1', 'loop-shot-1-hero')">⬇ Download PNG</button>
+      </div>
+      <div class="shot shot--hero" id="shot-1">
+        <div class="shot__inner">
+          <div class="shot__copy">
+            <div class="shot__brand-tag"><span class="dot"></span> Loop · Intercom + Featurebase</div>
+            <h2>See what shipped, <span class="accent">right in chat.</span></h2>
+            <p>Loop turns your Featurebase changelog into a card inside the Intercom Messenger. Customers see what's new before they have to ask.</p>
+          </div>
+          <div class="shot__visual">
+            <div class="msg">
+              <div class="msg__topbar">
+                <div class="msg__avatar">∞</div>
+                <div>
+                  Loop
+                  <div class="msg__topbar-meta">Recently shipped</div>
+                </div>
+              </div>
+              <div class="msg__body">
+                <div class="msg__header">Recently shipped</div>
+                <div class="msg__sub">Features we just launched. Tap an item for details.</div>
+
+                <div class="msg__item">
+                  <span class="pill pill--improved">IMPROVED</span>
+                  <div class="msg__item-content">
+                    <div class="msg__item-title">Theme support for size chart placement</div>
+                    <div class="msg__item-meta">Updated 3 days ago · 8 comments</div>
+                  </div>
+                </div>
+                <div class="msg__item">
+                  <span class="pill pill--new">NEW</span>
+                  <div class="msg__item-content">
+                    <div class="msg__item-title">Recommender v3 — AI-powered size suggestions</div>
+                    <div class="msg__item-meta">Updated 1 week ago · 24 comments</div>
+                  </div>
+                </div>
+                <div class="msg__item">
+                  <span class="pill pill--fixed">FIXED</span>
+                  <div class="msg__item-content">
+                    <div class="msg__item-title">Mobile widget rendering issue on Safari</div>
+                    <div class="msg__item-meta">Updated 2 weeks ago</div>
+                  </div>
+                </div>
+
+                <div class="msg__cta">See full roadmap</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SHOT 2 — DETAIL view
+    ───────────────────────────────────────────────────────── -->
+    <div>
+      <div class="shot-label">
+        <span>Shot 2 of 5 — Detail view</span>
+        <button class="download-btn" onclick="downloadShot('shot-2', 'loop-shot-2-detail')">⬇ Download PNG</button>
+      </div>
+      <div class="shot shot--detail" id="shot-2">
+        <div class="shot__inner shot__inner--reversed">
+          <div class="shot__copy">
+            <div class="shot__brand-tag"><span class="dot"></span> Built for customer-facing teams</div>
+            <h2>Full updates <span class="accent">without leaving chat.</span></h2>
+            <p>Tap any item to see the full release note inline. Customers stay in the Messenger; no extra tabs, no lost context.</p>
+          </div>
+          <div class="shot__visual">
+            <div class="msg">
+              <div class="msg__topbar">
+                <div class="msg__avatar">∞</div>
+                <div>
+                  Loop
+                  <div class="msg__topbar-meta">Update detail</div>
+                </div>
+              </div>
+              <div class="msg__body">
+                <div class="msg__back">← Back to all updates</div>
+                <span class="msg__big-pill" style="background:#8B5CF6;">IMPROVED</span>
+                <div class="msg__detail-title">Theme support for size chart placement</div>
+                <div class="msg__detail-meta">Updated 3 days ago · Kiwi Sizing · 8 comments</div>
+                <div class="msg__divider"></div>
+
+                <div class="msg__bh">What changed</div>
+                <div class="msg__bb">After reviewing the most popular themes used by Kiwi customers, we added native support for the Prestige and Impulse themes.</div>
+
+                <div class="msg__bh">Why it matters</div>
+                <div class="msg__bb">Merchants can place the size chart next to the Size header without writing custom code.</div>
+
+                <div class="msg__cta">Open on Featurebase</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SHOT 3 — Coming next (forward-looking)
+    ───────────────────────────────────────────────────────── -->
+    <div>
+      <div class="shot-label">
+        <span>Shot 3 of 5 — Coming next</span>
+        <button class="download-btn" onclick="downloadShot('shot-3', 'loop-shot-3-coming-next')">⬇ Download PNG</button>
+      </div>
+      <div class="shot shot--next" id="shot-3">
+        <div class="shot__inner">
+          <div class="shot__copy">
+            <div class="shot__brand-tag"><span class="dot"></span> Builds anticipation, not just retrospect</div>
+            <h2>Show what's <span class="accent">coming next.</span></h2>
+            <p>Optional Coming Next section surfaces in-progress roadmap items with upvote counts. Loop becomes a habit — customers check back to see what's being built.</p>
+          </div>
+          <div class="shot__visual">
+            <div class="msg msg--tall">
+              <div class="msg__topbar">
+                <div class="msg__avatar">∞</div>
+                <div>
+                  Loop
+                  <div class="msg__topbar-meta">Shipped + coming next</div>
+                </div>
+              </div>
+              <div class="msg__body">
+                <div class="msg__header">Recently shipped</div>
+
+                <div class="msg__item">
+                  <span class="pill pill--improved">IMPROVED</span>
+                  <div class="msg__item-content">
+                    <div class="msg__item-title">Theme support for size chart</div>
+                    <div class="msg__item-meta">Updated 3 days ago</div>
+                  </div>
+                </div>
+                <div class="msg__item">
+                  <span class="pill pill--new">NEW</span>
+                  <div class="msg__item-content">
+                    <div class="msg__item-title">Recommender v3 launch</div>
+                    <div class="msg__item-meta">Updated 1 week ago</div>
+                  </div>
+                </div>
+
+                <div class="msg__section">
+                  <div class="msg__header">Coming next</div>
+                  <div class="msg__sub">What we're actively building.</div>
+
+                  <div class="msg__item">
+                    <span class="pill pill--progress">IN PROGRESS</span>
+                    <div class="msg__item-content">
+                      <div class="msg__item-title">Bulk size chart editor</div>
+                      <div class="msg__item-meta">47 upvotes · 12 comments</div>
+                    </div>
+                  </div>
+                  <div class="msg__item">
+                    <span class="pill pill--progress">IN PROGRESS</span>
+                    <div class="msg__item-content">
+                      <div class="msg__item-title">Shopify checkout integration</div>
+                      <div class="msg__item-meta">23 upvotes</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="msg__cta">See full roadmap</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SHOT 4 — Configure (admin setup)
+    ───────────────────────────────────────────────────────── -->
+    <div>
+      <div class="shot-label">
+        <span>Shot 4 of 5 — Configure</span>
+        <button class="download-btn" onclick="downloadShot('shot-4', 'loop-shot-4-configure')">⬇ Download PNG</button>
+      </div>
+      <div class="shot shot--configure" id="shot-4">
+        <div class="shot__inner shot__inner--reversed">
+          <div class="shot__copy">
+            <div class="shot__brand-tag"><span class="dot"></span> 2-minute setup, zero code</div>
+            <h2>Set up Loop in <span class="accent">two minutes.</span></h2>
+            <p>Paste your Featurebase API key, pick a category, toggle the sections you want. No engineering, no Zapier, no maintenance.</p>
+          </div>
+          <div class="shot__visual">
+            <div class="form-mock">
+              <div class="crumb">← Back to apps</div>
+              <h3>Loop settings</h3>
+              <div class="form-sub">Customize how Loop appears to your customers. Leave any field blank to use the default.</div>
+
+              <div class="form-section-h">Featurebase connection</div>
+              <div class="field">
+                <label>Featurebase API key</label>
+                <div class="input">fb_live_•••••••••••••••••••••••••</div>
+              </div>
+              <div class="field">
+                <label>Filter to category (optional)</label>
+                <div class="input">Kiwi Sizing</div>
+              </div>
+
+              <div class="form-section-h">Display</div>
+              <div class="field">
+                <label>Show 'Coming next' section</label>
+                <div class="segment">
+                  <div class="segment__btn segment__btn--active">Yes — show in-progress</div>
+                  <div class="segment__btn">No — shipped only</div>
+                </div>
+              </div>
+              <div class="field">
+                <label>Show 'See full roadmap' button</label>
+                <div class="segment">
+                  <div class="segment__btn segment__btn--active">Yes</div>
+                  <div class="segment__btn">No</div>
+                </div>
+              </div>
+              <div class="field">
+                <label>Show comment counts on items</label>
+                <div class="segment">
+                  <div class="segment__btn segment__btn--active">Yes</div>
+                  <div class="segment__btn">No</div>
+                </div>
+              </div>
+
+              <div class="form-section-h">Counts</div>
+              <div class="field">
+                <label>Items shown before 'Show more'</label>
+                <div class="segment segment--triple">
+                  <div class="segment__btn segment__btn--active">3 items</div>
+                  <div class="segment__btn">5 items</div>
+                  <div class="segment__btn">8 items</div>
+                </div>
+              </div>
+
+              <div class="save-btn">Save settings</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SHOT 5 — Badges close-up
+    ───────────────────────────────────────────────────────── -->
+    <div>
+      <div class="shot-label">
+        <span>Shot 5 of 5 — Type badges</span>
+        <button class="download-btn" onclick="downloadShot('shot-5', 'loop-shot-5-badges')">⬇ Download PNG</button>
+      </div>
+      <div class="shot shot--badges" id="shot-5">
+        <div class="shot__inner">
+          <div class="shot__copy">
+            <div class="shot__brand-tag"><span class="dot"></span> Instant visual scanning</div>
+            <h2>Color-coded by <span class="accent">update type.</span></h2>
+            <p>NEW for fresh launches. IMPROVED for upgrades. FIXED for bug squashes. Customers know at a glance what kind of update each item is.</p>
+          </div>
+          <div class="shot__visual">
+            <div class="badge-trio">
+              <div class="badge-row">
+                <div class="pill-big pill-big--new">NEW</div>
+                <div class="badge-text">
+                  Recommender v3 launch
+                  <span class="badge-sub">AI-powered size suggestions</span>
+                </div>
+              </div>
+              <div class="badge-row">
+                <div class="pill-big pill-big--improved">IMPROVED</div>
+                <div class="badge-text">
+                  Theme support for size charts
+                  <span class="badge-sub">Now compatible with Prestige + Impulse</span>
+                </div>
+              </div>
+              <div class="badge-row">
+                <div class="pill-big pill-big--fixed">FIXED</div>
+                <div class="badge-text">
+                  Mobile rendering on Safari
+                  <span class="badge-sub">Widget no longer overflows on iOS 17</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Wait for fonts to load before any export, otherwise PNG renders with fallback fonts
+    async function waitForFonts() {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+    }
+
+    async function downloadShot(elementId, fileName) {
+      const button = event.target;
+      const originalText = button.textContent;
+      const el = document.getElementById(elementId);
+      if (!el) {
+        alert('Could not find shot: ' + elementId);
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Rendering...';
+      try {
+        await waitForFonts();
+        // Render at the element's natural CSS size (1600x1000) with pixelRatio 1
+        const dataUrl = await htmlToImage.toPng(el, {
+          width: 1600,
+          height: 1000,
+          pixelRatio: 1,
+          cacheBust: true,
+          backgroundColor: undefined,
+        });
+        const link = document.createElement('a');
+        link.download = fileName + '.png';
+        link.href = dataUrl;
+        link.click();
+      } catch (err) {
+        console.error('PNG export failed:', err);
+        alert('Export failed: ' + err.message + '\nCheck console for details.');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function downloadAll() {
+      const button = event.target;
+      const originalText = button.textContent;
+      button.disabled = true;
+      const shots = [
+        { id: 'shot-1', name: 'loop-shot-1-hero' },
+        { id: 'shot-2', name: 'loop-shot-2-detail' },
+        { id: 'shot-3', name: 'loop-shot-3-coming-next' },
+        { id: 'shot-4', name: 'loop-shot-4-configure' },
+        { id: 'shot-5', name: 'loop-shot-5-badges' },
+      ];
+      try {
+        await waitForFonts();
+        for (let i = 0; i < shots.length; i++) {
+          const { id, name } = shots[i];
+          button.textContent = `Rendering ${i + 1} of ${shots.length}...`;
+          const el = document.getElementById(id);
+          const dataUrl = await htmlToImage.toPng(el, {
+            width: 1600,
+            height: 1000,
+            pixelRatio: 1,
+            cacheBust: true,
+          });
+          const link = document.createElement('a');
+          link.download = name + '.png';
+          link.href = dataUrl;
+          link.click();
+          // Small pause so the browser handles each download cleanly
+          await new Promise(r => setTimeout(r, 400));
+        }
+        button.textContent = '✓ Downloaded all 5';
+        setTimeout(() => { button.textContent = originalText; button.disabled = false; }, 2000);
+      } catch (err) {
+        console.error('Batch export failed:', err);
+        alert('Export failed: ' + err.message);
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+  </script>
 
 </body>
 </html>
