@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loop — Live demo</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      background:
+        radial-gradient(ellipse at top right, rgba(255,228,230,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at bottom left, rgba(244,63,94,0.3) 0%, transparent 60%),
+        linear-gradient(135deg, #F43F5E 0%, #BE123C 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      position: relative;
+    }
+    body::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.18) 1.5px, transparent 1.5px);
+      background-size: 32px 32px;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .demo-card {
+      position: relative;
+      max-width: 640px;
+      text-align: center;
+      z-index: 1;
+    }
+    .brand-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 8px 16px;
+      border-radius: 999px;
+      margin-bottom: 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .brand-tag .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 0 4px rgba(16,185,129,0.25);
+    }
+    h1 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin-bottom: 20px;
+    }
+    h1 .accent {
+      background: linear-gradient(135deg, #FFE4E6 0%, #FECDD3 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    p.lead {
+      font-size: 1.25rem;
+      line-height: 1.6;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 32px;
+    }
+    .arrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      background: white;
+      color: #BE123C;
+      font-weight: 700;
+      border-radius: 999px;
+      font-size: 1rem;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+      animation: bob 2.5s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    .footer-note {
+      position: absolute;
+      bottom: 24px;
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.6);
+      z-index: 1;
+    }
+    .footer-note a { color: white; text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <div class="demo-card">
+    <div class="brand-tag"><span class="dot"></span> Loop · Live in this Messenger</div>
+    <h1>Try Loop in the <span class="accent">Messenger.</span></h1>
+    <p class="lead">Click the chat bubble in the bottom-right to open the Messenger. Loop's card appears on Home — tap any item to see the full update.</p>
+    <div class="arrow">↘ Open the chat bubble</div>
+  </div>
+
+  <div class="footer-note">
+    Built by <a href="/">GrindWorks Digital</a> · <a href="/website/privacy.html">Privacy</a> · <a href="/website/terms.html">Terms</a>
+  </div>
+
+  <!-- ─── INTERCOM MESSENGER (anonymous visitor mode) ─── -->
+  <script>
+    window.intercomSettings = {
+      api_base: "https://api-iam.intercom.io",
+      app_id: "ti9re07z"
+    };
+  </script>
+  <script>
+    (function(){var w=window;var ic=w.Intercom;if(typeof ic==="function"){ic('reattach_activator');ic('update',w.intercomSettings);}else{var d=document;var i=function(){i.c(arguments);};i.q=[];i.c=function(args){i.q.push(args);};w.Intercom=i;var l=function(){var s=d.createElement('script');s.type='text/javascript';s.async=true;s.src='https://widget.intercom.io/widget/ti9re07z';var x=d.getElementsByTagName('script')[0];x.parentNode.insertBefore(s,x);};if(document.readyState==='complete'){l();}else if(w.attachEvent){w.attachEvent('onload',l);}else{w.addEventListener('load',l,false);}}})();
+  </script>
+
+</body>
+</html>
