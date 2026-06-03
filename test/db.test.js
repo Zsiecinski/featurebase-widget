@@ -5,8 +5,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { dbAvailable, defaultWorkspaceId, logEvent, getAnalytics, recentEvents } =
-  await import('../src/db/index.js');
+const {
+  dbAvailable,
+  defaultWorkspaceId,
+  logEvent,
+  getAnalytics,
+  recentEvents,
+  getEngagedUsers,
+  getUniqueVisitors,
+  getTopItemsWithClickers,
+  getUserTimeline,
+} = await import('../src/db/index.js');
 
 test('dbAvailable: false when DATABASE_URL is unset', () => {
   delete process.env.DATABASE_URL;
@@ -47,4 +56,24 @@ test('recentEvents: returns [] when DATABASE_URL is unset', async () => {
   delete process.env.DATABASE_URL;
   const result = await recentEvents({ limit: 10 });
   assert.deepEqual(result, []);
+});
+
+test('getEngagedUsers: returns [] when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  assert.deepEqual(await getEngagedUsers('staytuned', { days: 30 }), []);
+});
+
+test('getUniqueVisitors: returns 0 when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  assert.equal(await getUniqueVisitors('staytuned', { days: 30 }), 0);
+});
+
+test('getTopItemsWithClickers: returns [] when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  assert.deepEqual(await getTopItemsWithClickers('staytuned', { days: 30 }), []);
+});
+
+test('getUserTimeline: returns null when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  assert.equal(await getUserTimeline('staytuned', 'abc123', { days: 90 }), null);
 });
