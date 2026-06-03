@@ -24,6 +24,7 @@ import {
   getDailyActivity,
   getEngagedUsers,
   getEngagementByShop,
+  getItemDetail,
   getPriorPeriodCounts,
   getTopItemsWithClickers,
   getUserSparklines,
@@ -169,6 +170,35 @@ export function registerAdminRoutes(app) {
     res.json({
       ...data,
       user: maskUser(data.user, showPii),
+    });
+  });
+
+  // Per-item drilldown — every visitor who clicked this item, with shop
+  // and click counts. Reached by clicking an item title in the dashboard.
+  app.get('/admin/analytics/:workspaceId/item/:itemId', requireAdminToken, async (req, res) => {
+    if (!dbAvailable()) return res.status(503).json({ error: 'DB not configured' });
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    const showPii = truthyParam(req.query.show_pii);
+    const data = await getItemDetail(req.params.workspaceId, req.params.itemId, { days });
+    if (!data) return res.status(404).json({ error: 'no clicks for this item yet' });
+
+    const wantsHtml =
+      req.query.format === 'html' ||
+      (req.query.format !== 'json' && req.accepts(['json', 'html']) === 'html');
+    if (wantsHtml) {
+      res.type('html').send(
+        itemDetailHtml(data, {
+          workspaceId: req.params.workspaceId,
+          token: tokenFrom(req),
+          showPii,
+          theme: themeFrom(req),
+        }),
+      );
+      return;
+    }
+    res.json({
+      ...data,
+      clickers: data.clickers.map((c) => maskUser(c, showPii)),
     });
   });
 }
@@ -725,19 +755,22 @@ function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
   const itemRows = items.length
     ? items
         .map((it, i) => {
-          // Render top 3 clickers inline per item; rest summarized.
+          // Render top 3 clickers inline per item; rest summarized + linked.
           const top = it.clickers.slice(0, 3);
           const extra = it.clickers.length - top.length;
+          const itemUrl = `/admin/analytics/${encodeURIComponent(d.tenant.workspaceId)}/item/${encodeURIComponent(it.itemId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeSuffix}`;
+          const moreLink = extra > 0
+            ? `<a class="clicker" href="${itemUrl}">+ ${extra} more →</a>`
+            : '';
           const clickersHtml = top.length
             ? top
                 .map((c) => `<span class="clicker">${userLabel(c, { workspaceId: d.tenant.workspaceId, token })} <span class="count">· ${fmt(c.clicks)}</span></span>`)
-                .join('') +
-              (extra > 0 ? `<span class="clicker muted">+ ${extra} more</span>` : '')
-            : `<span class="muted">no contact data</span>`;
+                .join('') + moreLink
+            : `<a class="muted" href="${itemUrl}">view breakdown →</a>`;
           return `
         <tr>
           <td class="rank">${i + 1}</td>
-          <td><strong>${escape(it.title || it.itemId)}</strong></td>
+          <td><a href="${itemUrl}"><strong>${escape(it.title || it.itemId)}</strong></a></td>
           <td><div class="clicker-list">${clickersHtml}</div></td>
           <td class="num">${fmt(it.clicks)}</td>
         </tr>`;
@@ -1010,6 +1043,148 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false, theme =
     <dt>Type</dt><dd>${escape(u.type || '—')}</dd>
     <dt>Shop</dt><dd>${d.user.shop ? shopCell(d.user.shop) : '<span class="muted">—</span>'}</dd>
     ${d.user.companyName && d.user.companyName !== d.user.shop ? `<dt>Company</dt><dd>${escape(d.user.companyName)}</dd>` : ''}
+  </dl>
+
+  <div class="footer">
+    Loop internal analytics ·
+    <a href="?format=json&days=${d.periodDays}${tokenSuffix}${piiSuffix}">view as JSON</a> ·
+    <a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeSuffix}">back to dashboard</a>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+// ---------------------------------------------------------------------------
+// Per-item drilldown — every visitor who clicked one item, with their
+// identity, shop, click count, and last-clicked timestamp. Reached by
+// clicking an item title in the dashboard's "Top items" table.
+// ---------------------------------------------------------------------------
+function itemDetailHtml(d, { workspaceId, token = '', showPii = false, theme = null } = {}) {
+  const tokenSuffix = token ? `&token=${encodeURIComponent(token)}` : '';
+  const piiSuffix = showPii ? '&show_pii=1' : '';
+  const themeSuffix = theme ? `&theme=${theme}` : '';
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  const themeToggleSuffix = `&theme=${nextTheme}`;
+  const themeLabel = theme === 'dark'
+    ? '☀ Light mode'
+    : '🌙 Dark mode';
+
+  // Mask each clicker per the toggle.
+  const clickers = d.clickers.map((c) => maskUser(c, showPii));
+
+  const clickerRows = clickers.length
+    ? clickers
+        .map((c, i) => `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td>${userLabel(c, { workspaceId, token })}</td>
+          <td>${shopCell(c.shop)}</td>
+          <td class="num">${fmt(c.clicks)}</td>
+          <td class="num"><span class="muted">${dt(c.lastClicked).slice(0, 16)}</span></td>
+        </tr>`)
+        .join('')
+    : `<tr><td colspan="5" class="muted-cell">No clickers yet in this window.</td></tr>`;
+
+  // Average clicks per identified clicker (skipping the (anonymous) bucket).
+  const identifiedClickers = clickers.filter((c) => c.contactId);
+  const identifiedClicks = identifiedClickers.reduce((sum, c) => sum + c.clicks, 0);
+  const avgClicks = identifiedClickers.length > 0
+    ? (identifiedClicks / identifiedClickers.length).toFixed(1)
+    : '0';
+
+  return `<!doctype html>
+<html lang="en"${theme ? ` data-theme="${theme}"` : ''}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>${escape(d.item.title)} — Loop analytics</title>
+<style>${sharedStyle}</style>
+</head>
+<body>
+<div class="container">
+  <div class="sub"><a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeSuffix}">← All analytics</a></div>
+  <h1>${escape(d.item.title)}</h1>
+  <div class="sub">Item breakdown · Last ${d.periodDays} days</div>
+  <div class="ws-pill">${escape(workspaceId)}</div>
+
+  <div class="toolbar">
+    <div class="range-nav">
+      <a class="${d.periodDays === 7   ? 'active' : ''}" href="?format=html&days=7${tokenSuffix}${piiSuffix}${themeSuffix}">7 days</a>
+      <a class="${d.periodDays === 30  ? 'active' : ''}" href="?format=html&days=30${tokenSuffix}${piiSuffix}${themeSuffix}">30 days</a>
+      <a class="${d.periodDays === 90  ? 'active' : ''}" href="?format=html&days=90${tokenSuffix}${piiSuffix}${themeSuffix}">90 days</a>
+      <a class="${d.periodDays === 365 ? 'active' : ''}" href="?format=html&days=365${tokenSuffix}${piiSuffix}${themeSuffix}">1 year</a>
+    </div>
+    <div class="toolbar-right">
+      <a class="toggle toggle--off" href="?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeToggleSuffix}">
+        ${themeLabel}
+      </a>
+      <a class="toggle ${showPii ? 'toggle--on' : 'toggle--off'}"
+         href="?format=html&days=${d.periodDays}${tokenSuffix}${themeSuffix}${showPii ? '' : '&show_pii=1'}">
+        ${showPii ? '🔓 Hide identities' : '🔒 Show full identities'}
+      </a>
+    </div>
+  </div>
+
+  ${showPii ? `
+  <div class="pii-banner">
+    ⚠ Full names and email addresses are visible. Be careful with screen-shares.
+  </div>` : ''}
+
+  <div class="grid">
+    <div class="kpi kpi--accent">
+      <div class="kpi__label">Clicks (period)</div>
+      <div class="kpi__value">${fmt(d.totals.clicksPeriod)}</div>
+      <div class="kpi__sub">${fmt(d.totals.clicksAllTime)} all-time</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__label">Unique clickers</div>
+      <div class="kpi__value">${fmt(d.totals.uniqueClickers)}</div>
+      <div class="kpi__sub">identified visitors</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__label">Avg clicks / clicker</div>
+      <div class="kpi__value">${avgClicks}</div>
+      <div class="kpi__sub">depth of engagement</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__label">Anonymous clicks</div>
+      <div class="kpi__value">${fmt(d.totals.anonymousClicks)}</div>
+      <div class="kpi__sub">from logged-out leads</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card__head">
+      <div class="chart-card__title">Daily clicks (last ${d.periodDays} days)</div>
+      <div class="chart-card__legend">
+        <span><span class="sw sw--clicks"></span>Clicks</span>
+      </div>
+    </div>
+    ${dailyChartSvg(d.dailyActivity || [])}
+  </div>
+
+  <h2>Everyone who clicked (last ${d.periodDays} days)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Visitor</th>
+        <th>Shop</th>
+        <th class="num">Clicks</th>
+        <th class="num">Last clicked</th>
+      </tr>
+    </thead>
+    <tbody>${clickerRows}</tbody>
+  </table>
+
+  <h2>Item details</h2>
+  <dl class="meta">
+    <dt>Item title</dt><dd>${escape(d.item.title)}</dd>
+    <dt>Item ID</dt><dd>${escape(d.item.id)}</dd>
+    <dt>First clicked</dt><dd>${dt(d.item.firstClicked)}</dd>
+    <dt>Last clicked</dt><dd>${dt(d.item.lastClicked)}</dd>
   </dl>
 
   <div class="footer">

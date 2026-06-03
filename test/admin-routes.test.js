@@ -125,6 +125,26 @@ test('admin/analytics/:ws/user/:contactId returns 503 when DB unconfigured', asy
   delete process.env.ADMIN_TOKEN;
 });
 
+test('admin/analytics/:ws/item/:itemId returns 404 when ADMIN_TOKEN is unset', async () => {
+  delete process.env.ADMIN_TOKEN;
+  await withServer(async (port) => {
+    const r = await get(port, '/admin/analytics/staytuned/item/abc123');
+    assert.equal(r.status, 404);
+  });
+});
+
+test('admin/analytics/:ws/item/:itemId returns 503 when DB unconfigured', async () => {
+  process.env.ADMIN_TOKEN = 'secret-token-123';
+  delete process.env.DATABASE_URL;
+  await withServer(async (port) => {
+    const r = await get(port, '/admin/analytics/staytuned/item/abc123?token=secret-token-123');
+    assert.equal(r.status, 503);
+    const body = JSON.parse(r.body);
+    assert.match(body.error, /DB not configured/i);
+  });
+  delete process.env.ADMIN_TOKEN;
+});
+
 test('admin/analytics: accepts theme=dark and theme=light without error', async () => {
   // Even without DB this is enough to prove the query string isn't broken
   // by the new theme param. With DB, the route would render the dashboard
