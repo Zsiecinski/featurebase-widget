@@ -8,14 +8,16 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node scripts/db-migrate.mjs && node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test test/",
-    "logos": "node scripts/generate-pngs.mjs"
+    "logos": "node scripts/generate-pngs.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "sharp": "^0.33.5"
