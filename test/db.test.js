@@ -168,3 +168,60 @@ test('resolveShop: handles non-string custom attribute values (numeric IDs)', ()
     '12345',
   );
 });
+
+// ---------------------------------------------------------------------------
+// Intercom `user_id` as shop source. Many setups (including Staytuned's)
+// store the myshopify domain in Intercom's "external user ID" field. We
+// accept it only when it LOOKS LIKE a domain — so an Intercom install
+// that uses user_id for internal customer IDs ("cust_12345") doesn't get
+// those IDs surfaced as fake shops.
+// ---------------------------------------------------------------------------
+
+test('resolveShop: picks up myshopify domain from contact_user_id', () => {
+  assert.equal(
+    resolveShop({ contact_user_id: 'acme-store.myshopify.com' }),
+    'acme-store.myshopify.com',
+  );
+});
+
+test('resolveShop: contact_user_id falls behind custom attributes', () => {
+  // If both are set, the explicit attribute wins — it's more specific.
+  assert.equal(
+    resolveShop({
+      contact_custom_attributes: { shopify_domain: 'attr.myshopify.com' },
+      contact_user_id: 'uid.myshopify.com',
+    }),
+    'attr.myshopify.com',
+  );
+});
+
+test('resolveShop: contact_user_id beats company fallback', () => {
+  assert.equal(
+    resolveShop({
+      contact_user_id: 'acme.myshopify.com',
+      company_name: 'fallback',
+    }),
+    'acme.myshopify.com',
+  );
+});
+
+test('resolveShop: ignores contact_user_id that does NOT look domain-shaped', () => {
+  // Guard against surfacing internal IDs like "cust_12345" as shop values.
+  assert.equal(resolveShop({ contact_user_id: 'cust_12345' }), null);
+  assert.equal(resolveShop({ contact_user_id: '7891234' }), null);
+  assert.equal(resolveShop({ contact_user_id: 'Bob Smith' }), null); // has space
+  assert.equal(resolveShop({ contact_user_id: '' }), null);
+});
+
+test('resolveShop: accepts contact_user_id even if not strictly myshopify.com', () => {
+  // Some setups store the shop's custom domain instead of the .myshopify one.
+  // As long as it looks domain-shaped we surface it.
+  assert.equal(
+    resolveShop({ contact_user_id: 'acme.shop' }),
+    'acme.shop',
+  );
+  assert.equal(
+    resolveShop({ contact_user_id: 'www.acmestore.com' }),
+    'www.acmestore.com',
+  );
+});
