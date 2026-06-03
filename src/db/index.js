@@ -139,6 +139,15 @@ export async function getAnalytics(workspaceId, { days = 30 } = {}) {
       AND metadata->>'contact_id' IS NOT NULL
       AND created_at >= ${sinceDate}
   `;
+  // Distinct items clicked — useful "breadth of engagement" signal.
+  const [items] = await s`
+    SELECT COUNT(DISTINCT metadata->>'item_id')::int AS n
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND event = 'item_clicked'
+      AND metadata->>'item_id' IS NOT NULL
+      AND created_at >= ${sinceDate}
+  `;
 
   return {
     tenant: {
@@ -152,6 +161,8 @@ export async function getAnalytics(workspaceId, { days = 30 } = {}) {
       itemClicks: clicks,
       clickThroughRate: renders > 0 ? Number((clicks / renders).toFixed(3)) : 0,
       uniqueVisitors: uniques?.n || 0,
+      itemsClicked: items?.n || 0,
+      clicksPerVisitor: uniques?.n > 0 ? Number((clicks / uniques.n).toFixed(2)) : 0,
       configureOpened: period.configure_opened || 0,
       configureSaved: period.configure_saved || 0,
       installs: period.install || 0,
@@ -344,7 +355,7 @@ export async function getUserSparklines(workspaceId, contactIds, { days = 7 } = 
  */
 export async function getPriorPeriodCounts(workspaceId, { days = 30 } = {}) {
   const s = init();
-  if (!s) return { cardsRendered: 0, itemClicks: 0, configureSaved: 0, uniqueVisitors: 0 };
+  if (!s) return { cardsRendered: 0, itemClicks: 0, configureSaved: 0, uniqueVisitors: 0, itemsClicked: 0 };
   const n = Math.min(Math.max(Number(days) || 30, 1), 365);
 
   const rows = await s`
@@ -365,12 +376,22 @@ export async function getPriorPeriodCounts(workspaceId, { days = 30 } = {}) {
       AND created_at >= NOW() - (2 * ${n})::int * INTERVAL '1 day'
       AND created_at <  NOW() - ${n}::int * INTERVAL '1 day'
   `;
+  const [itemsPrior] = await s`
+    SELECT COUNT(DISTINCT metadata->>'item_id')::int AS n
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND event = 'item_clicked'
+      AND metadata->>'item_id' IS NOT NULL
+      AND created_at >= NOW() - (2 * ${n})::int * INTERVAL '1 day'
+      AND created_at <  NOW() - ${n}::int * INTERVAL '1 day'
+  `;
 
   return {
     cardsRendered: byEvent.card_rendered || 0,
     itemClicks: byEvent.item_clicked || 0,
     configureSaved: byEvent.configure_saved || 0,
     uniqueVisitors: uniq?.n || 0,
+    itemsClicked: itemsPrior?.n || 0,
   };
 }
 
@@ -823,7 +844,8 @@ export async function getUserTimeline(workspaceId, contactId, { days = 90, limit
   // Aggregate counts for the user header KPIs.
   const [counts] = await s`
     SELECT COUNT(*) FILTER (WHERE event = 'item_clicked')::int  AS clicks,
-           COUNT(*) FILTER (WHERE event = 'card_rendered')::int AS renders
+           COUNT(*) FILTER (WHERE event = 'card_rendered')::int AS renders,
+           COUNT(DISTINCT metadata->>'item_id') FILTER (WHERE event = 'item_clicked')::int AS items_clicked
     FROM events
     WHERE workspace_id = ${workspaceId}
       AND metadata->>'contact_id' = ${contactId}
@@ -850,6 +872,7 @@ export async function getUserTimeline(workspaceId, contactId, { days = 90, limit
     totals: {
       clicks: counts?.clicks || 0,
       renders: counts?.renders || 0,
+      itemsClicked: counts?.items_clicked || 0,
     },
     events: events.map((e) => ({
       id: e.id,

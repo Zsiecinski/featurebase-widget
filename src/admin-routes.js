@@ -107,6 +107,62 @@ export function registerAdminRoutes(app) {
       sparkline: userSparklines.get(u.contactId) || [],
     }));
 
+    // CSV export — section param picks which table to download. Defaults
+    // to "visitors" since that's the most actionable dataset (who to
+    // follow up with). Masking still applies, so use ?show_pii=1 to get
+    // raw identities in the CSV.
+    if (req.query.format === 'csv') {
+      const section = req.query.section || 'visitors';
+      const fileBase = `loop-${req.params.workspaceId}-${section}-${days}d.csv`;
+      if (section === 'shops') {
+        const csv = rowsToCsv(
+          ['rank', 'shop', 'unique_visitors', 'clicks'],
+          byShop.map((s, i) => [i + 1, s.shop, s.uniqueVisitors, s.clicks]),
+        );
+        return sendCsv(res, fileBase, csv);
+      }
+      if (section === 'items') {
+        const csv = rowsToCsv(
+          ['rank', 'item_id', 'item_title', 'total_clicks', 'top_clickers'],
+          itemsWithClickers.map((it, i) => [
+            i + 1,
+            it.itemId,
+            it.title,
+            it.clicks,
+            it.clickers
+              .slice(0, 5)
+              .map((c) => {
+                const m = maskUser(c, showPii);
+                const label = m.name || m.email || '(anonymous)';
+                return `${label} (${c.clicks})`;
+              })
+              .join('; '),
+          ]),
+        );
+        return sendCsv(res, fileBase, csv);
+      }
+      // Default: visitors. Pull a deeper list (up to 200) for export so
+      // CSV users get more than the dashboard's top-5 view.
+      const allEngaged = await getEngagedUsers(req.params.workspaceId, { days, limit: 200 });
+      const csv = rowsToCsv(
+        ['rank', 'name', 'email', 'shop', 'contact_type', 'contact_id', 'clicks', 'last_seen_utc'],
+        allEngaged.map((u, i) => {
+          const m = maskUser(u, showPii);
+          return [
+            i + 1,
+            m.name || '',
+            m.email || '',
+            u.shop || '',
+            u.type || '',
+            u.contactId || '',
+            u.clicks,
+            csvDt(u.lastSeen),
+          ];
+        }),
+      );
+      return sendCsv(res, fileBase, csv);
+    }
+
     const wantsHtml =
       req.query.format === 'html' ||
       (req.query.format !== 'json' && req.accepts(['json', 'html']) === 'html');
@@ -153,6 +209,24 @@ export function registerAdminRoutes(app) {
     const data = await getUserTimeline(req.params.workspaceId, req.params.contactId, { days });
     if (!data) return res.status(404).json({ error: 'no events for this user' });
 
+    if (req.query.format === 'csv') {
+      const masked = maskUser(data.user, showPii);
+      const label = masked.name || masked.email || data.user.contactId;
+      // Only export click events (per the renders-removed cleanup).
+      const clicksOnly = data.events.filter((e) => e.event === 'item_clicked');
+      const csv = rowsToCsv(
+        ['timestamp_utc', 'event', 'item_id', 'item_title', 'shop'],
+        clicksOnly.map((e) => [
+          csvDt(e.at),
+          e.event,
+          e.metadata?.item_id || '',
+          e.metadata?.item_title || '',
+          data.user.shop || '',
+        ]),
+      );
+      return sendCsv(res, `loop-${req.params.workspaceId}-user-${label.replace(/[^a-z0-9]+/gi, '-')}-${days}d.csv`, csv);
+    }
+
     const wantsHtml =
       req.query.format === 'html' ||
       (req.query.format !== 'json' && req.accepts(['json', 'html']) === 'html');
@@ -182,6 +256,27 @@ export function registerAdminRoutes(app) {
     const data = await getItemDetail(req.params.workspaceId, req.params.itemId, { days });
     if (!data) return res.status(404).json({ error: 'no clicks for this item yet' });
 
+    if (req.query.format === 'csv') {
+      const csv = rowsToCsv(
+        ['rank', 'name', 'email', 'shop', 'contact_type', 'contact_id', 'clicks', 'last_clicked_utc'],
+        data.clickers.map((c, i) => {
+          const m = maskUser(c, showPii);
+          return [
+            i + 1,
+            m.name || '',
+            m.email || '',
+            c.shop || '',
+            c.type || '',
+            c.contactId || '',
+            c.clicks,
+            csvDt(c.lastClicked),
+          ];
+        }),
+      );
+      const safeTitle = (data.item.title || data.item.id).replace(/[^a-z0-9]+/gi, '-').slice(0, 40);
+      return sendCsv(res, `loop-${req.params.workspaceId}-item-${safeTitle}-${days}d.csv`, csv);
+    }
+
     const wantsHtml =
       req.query.format === 'html' ||
       (req.query.format !== 'json' && req.accepts(['json', 'html']) === 'html');
@@ -201,6 +296,43 @@ export function registerAdminRoutes(app) {
       clickers: data.clickers.map((c) => maskUser(c, showPii)),
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// CSV helpers. Conservative escaping per RFC 4180 — wrap a value in double
+// quotes if it contains a comma, double quote, or newline; double up
+// internal quotes; otherwise pass through unchanged. Header row is the
+// first row of the output. UTF-8 BOM prefix makes Excel auto-detect
+// encoding correctly when opened directly.
+// ---------------------------------------------------------------------------
+// Exported for unit tests + reuse (e.g. a daily email digest).
+export function csvEscape(v) {
+  if (v == null) return '';
+  const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+export function rowsToCsv(headers, rows) {
+  const head = headers.map(csvEscape).join(',');
+  const body = rows.map((r) => r.map(csvEscape).join(',')).join('\r\n');
+  // UTF-8 BOM so Excel renders accented/emoji characters correctly.
+  return '﻿' + head + '\r\n' + body + (body ? '\r\n' : '');
+}
+
+function sendCsv(res, filename, csv) {
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
+}
+
+// Format a datetime cell for CSV. ISO with seconds, no fractional part —
+// universally parseable by Excel / Sheets / pandas without quoting tricks.
+function csvDt(s) {
+  if (!s) return '';
+  return new Date(s).toISOString().slice(0, 19).replace('T', ' ');
 }
 
 // ---------------------------------------------------------------------------
@@ -280,13 +412,16 @@ function dailyChartSvg(daily) {
     </svg>`;
   }
 
-  const maxVal = Math.max(1, ...daily.map((d) => Math.max(d.renders, d.clicks)));
+  // Clicks-only chart. We keep the renders field on the data shape for
+  // forward compatibility but no longer surface it in the dashboard UI
+  // (per the "focus on visitors and clicks" cleanup).
+  const maxVal = Math.max(1, ...daily.map((d) => d.clicks));
   // Nice round-up for the Y axis upper bound.
   const yMax = niceCeil(maxVal);
 
   const slotW = innerW / daily.length;
-  const barW = Math.max(2, slotW * 0.36);
-  const barGap = slotW * 0.08;
+  // Single-series mode: one wide bar per day instead of two narrow ones.
+  const barW = Math.max(3, slotW * 0.55);
 
   // Y-axis ticks at 0, half, full.
   const yTicks = [0, Math.round(yMax / 2), yMax];
@@ -311,25 +446,20 @@ function dailyChartSvg(daily) {
   const bars = daily
     .map((d, i) => {
       const slotX = PAD.left + i * slotW;
-      const x0 = slotX + (slotW - barW * 2 - barGap) / 2;
-      const renderH = (d.renders / yMax) * innerH;
+      const x0 = slotX + (slotW - barW) / 2;
       const clickH = (d.clicks / yMax) * innerH;
-      const yR = PAD.top + innerH - renderH;
       const yC = PAD.top + innerH - clickH;
       const dateLabel = new Date(d.day).toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
       });
-      // Friendly tooltip text. SVG <title> uses \n for line breaks, which
-      // most browsers render as separate lines in the native tooltip.
-      const tooltip = `${dateLabel}\n${d.clicks} click${d.clicks === 1 ? '' : 's'} · ${d.renders} render${d.renders === 1 ? '' : 's'}`;
+      const tooltip = `${dateLabel}\n${d.clicks} click${d.clicks === 1 ? '' : 's'}`;
       return `
         <g class="day-group">
           <title>${tooltip}</title>
           <rect x="${slotX}" y="${PAD.top}" width="${slotW}" height="${innerH}" class="hit-area" />
-          <rect x="${x0}" y="${yR}" width="${barW}" height="${renderH}" class="bar-renders" rx="1.5" />
-          <rect x="${x0 + barW + barGap}" y="${yC}" width="${barW}" height="${clickH}" class="bar-clicks" rx="1.5" />
+          <rect x="${x0}" y="${yC}" width="${barW}" height="${clickH}" class="bar-clicks" rx="1.5" />
         </g>
       `;
     })
@@ -724,11 +854,10 @@ function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
           <td>${shopCell(u.shop)}</td>
           <td>${sparklineSvg(u.sparkline || [])}</td>
           <td class="num">${fmt(u.clicks)}</td>
-          <td class="num">${fmt(u.renders)}</td>
           <td class="num"><span class="muted">${dt(u.lastSeen).slice(0, 16)}</span></td>
         </tr>`)
         .join('')
-    : `<tr><td colspan="7" class="muted-cell">No identified visitors yet in this window.</td></tr>`;
+    : `<tr><td colspan="6" class="muted-cell">No identified visitors yet in this window.</td></tr>`;
 
   // Top-shops section. Only render if Intercom is actually sending shop
   // data — otherwise show a helpful empty-state explaining how to wire it.
@@ -741,10 +870,9 @@ function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
           <td>${sparklineSvg(s.sparkline || [])}</td>
           <td class="num">${fmt(s.uniqueVisitors)}</td>
           <td class="num">${fmt(s.clicks)}</td>
-          <td class="num">${fmt(s.renders)}</td>
         </tr>`)
         .join('')
-    : `<tr><td colspan="6" class="muted-cell">
+    : `<tr><td colspan="5" class="muted-cell">
          No shop attribution yet. Intercom contacts (or their companies) need a
          <code>shopify_domain</code> custom attribute set — or the myshopify
          domain stored in Intercom's <code>user_id</code> field — for Loop to
@@ -818,33 +946,32 @@ function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
 
   <div class="grid">
     <div class="kpi kpi--accent">
-      <div class="kpi__label">Cards rendered</div>
-      <div class="kpi__value">${fmt(d.period.cardsRendered)} ${deltaBadge(d.period.cardsRendered, d.priorPeriod?.cardsRendered)}</div>
-      <div class="kpi__sub">${fmt(d.priorPeriod?.cardsRendered || 0)} in prior ${d.periodDays} days</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi__label">Unique visitors</div>
+      <div class="kpi__label">Visitors</div>
       <div class="kpi__value">${fmt(d.period.uniqueVisitors)} ${deltaBadge(d.period.uniqueVisitors, d.priorPeriod?.uniqueVisitors)}</div>
       <div class="kpi__sub">${fmt(d.priorPeriod?.uniqueVisitors || 0)} in prior ${d.periodDays} days</div>
     </div>
     <div class="kpi">
-      <div class="kpi__label">Item clicks</div>
+      <div class="kpi__label">Clicks</div>
       <div class="kpi__value">${fmt(d.period.itemClicks)} ${deltaBadge(d.period.itemClicks, d.priorPeriod?.itemClicks)}</div>
       <div class="kpi__sub">${fmt(d.priorPeriod?.itemClicks || 0)} in prior ${d.periodDays} days</div>
     </div>
     <div class="kpi">
-      <div class="kpi__label">Click-through rate</div>
-      <div class="kpi__value">${pct(d.period.clickThroughRate)}</div>
-      <div class="kpi__sub">clicks ÷ renders</div>
+      <div class="kpi__label">Items clicked</div>
+      <div class="kpi__value">${fmt(d.period.itemsClicked || 0)} ${deltaBadge(d.period.itemsClicked || 0, d.priorPeriod?.itemsClicked || 0)}</div>
+      <div class="kpi__sub">distinct items in window</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__label">Clicks per visitor</div>
+      <div class="kpi__value">${fmt(d.period.clicksPerVisitor || 0)}</div>
+      <div class="kpi__sub">depth of engagement</div>
     </div>
   </div>
 
   <div class="chart-card">
     <div class="chart-card__head">
-      <div class="chart-card__title">Daily activity (last ${d.periodDays} days)</div>
+      <div class="chart-card__title">Daily clicks (last ${d.periodDays} days)</div>
       <div class="chart-card__legend">
         <span><span class="sw sw--clicks"></span>Clicks</span>
-        <span><span class="sw sw--renders"></span>Renders</span>
       </div>
     </div>
     ${dailyChartSvg(d.dailyActivity || [])}
@@ -858,8 +985,7 @@ function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
         <th>Visitor</th>
         <th>Shop</th>
         <th style="width: 100px;">7-day trend</th>
-        <th class="num">Item clicks</th>
-        <th class="num">Renders</th>
+        <th class="num">Clicks</th>
         <th class="num">Last seen</th>
       </tr>
     </thead>
@@ -873,9 +999,8 @@ function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
         <th>#</th>
         <th>Shop</th>
         <th style="width: 100px;">7-day trend</th>
-        <th class="num">Unique visitors</th>
+        <th class="num">Visitors</th>
         <th class="num">Clicks</th>
-        <th class="num">Renders</th>
       </tr>
     </thead>
     <tbody>${shopRows}</tbody>
@@ -902,7 +1027,11 @@ function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
   </dl>
 
   <div class="footer">
-    Loop internal analytics · window: <code>?days=${d.periodDays}</code> ·
+    Loop internal analytics · window: <code>?days=${d.periodDays}</code><br>
+    <strong>Export CSV:</strong>
+    <a href="?format=csv&section=visitors&days=${d.periodDays}${tokenSuffix}${piiSuffix}">visitors</a> ·
+    <a href="?format=csv&section=shops&days=${d.periodDays}${tokenSuffix}${piiSuffix}">shops</a> ·
+    <a href="?format=csv&section=items&days=${d.periodDays}${tokenSuffix}${piiSuffix}">items</a><br>
     <a href="?format=json&days=${d.periodDays}${tokenSuffix}${piiSuffix}">view as JSON</a> ·
     <a href="/admin/events?${token ? `token=${encodeURIComponent(token)}` : ''}">recent events</a>
   </div>
@@ -951,8 +1080,13 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false, theme =
     return `<span class="muted">${escape(e.event)}</span>`;
   }
 
-  const timelineRows = d.events.length
-    ? d.events
+  // Show only meaningful events — clicks + configure. Renders are still
+  // logged behind the scenes but no longer surfaced (per the visitors-
+  // and-clicks focus). This makes the timeline a real "what did they
+  // engage with" view instead of a render firehose.
+  const visibleEvents = d.events.filter((e) => e.event !== 'card_rendered');
+  const timelineRows = visibleEvents.length
+    ? visibleEvents
         .map((e) => `
         <tr class="timeline-row">
           <td>${eventPill(e.event)}</td>
@@ -960,7 +1094,7 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false, theme =
           <td class="num"><span class="muted">${dt(e.at)}</span></td>
         </tr>`)
         .join('')
-    : `<tr><td colspan="3" class="muted-cell">No events for this user in the last ${d.periodDays} days.</td></tr>`;
+    : `<tr><td colspan="3" class="muted-cell">No clicks or configure events for this user in the last ${d.periodDays} days.</td></tr>`;
 
   return `<!doctype html>
 <html lang="en"${theme ? ` data-theme="${theme}"` : ''}>
@@ -1002,14 +1136,14 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false, theme =
 
   <div class="grid">
     <div class="kpi kpi--accent">
-      <div class="kpi__label">Item clicks</div>
+      <div class="kpi__label">Clicks</div>
       <div class="kpi__value">${fmt(d.totals.clicks)}</div>
       <div class="kpi__sub">in last ${d.periodDays} days</div>
     </div>
     <div class="kpi">
-      <div class="kpi__label">Cards rendered</div>
-      <div class="kpi__value">${fmt(d.totals.renders)}</div>
-      <div class="kpi__sub">in last ${d.periodDays} days</div>
+      <div class="kpi__label">Items clicked</div>
+      <div class="kpi__value">${fmt(d.totals.itemsClicked || 0)}</div>
+      <div class="kpi__sub">distinct items</div>
     </div>
     <div class="kpi">
       <div class="kpi__label">First seen</div>
@@ -1047,6 +1181,7 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false, theme =
 
   <div class="footer">
     Loop internal analytics ·
+    <a href="?format=csv&days=${d.periodDays}${tokenSuffix}${piiSuffix}">export clicks CSV</a> ·
     <a href="?format=json&days=${d.periodDays}${tokenSuffix}${piiSuffix}">view as JSON</a> ·
     <a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeSuffix}">back to dashboard</a>
   </div>
@@ -1189,6 +1324,7 @@ function itemDetailHtml(d, { workspaceId, token = '', showPii = false, theme = n
 
   <div class="footer">
     Loop internal analytics ·
+    <a href="?format=csv&days=${d.periodDays}${tokenSuffix}${piiSuffix}">export clickers CSV</a> ·
     <a href="?format=json&days=${d.periodDays}${tokenSuffix}${piiSuffix}">view as JSON</a> ·
     <a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeSuffix}">back to dashboard</a>
   </div>
