@@ -242,6 +242,139 @@ export function resolveShop(metadata) {
 }
 
 /**
+ * Daily activity for the main bar chart at the top of the dashboard.
+ * Returns one entry per day in the [since, now] window — including days
+ * with zero activity, so the chart's X-axis is uniform. Two metrics per
+ * day: renders + clicks (the two events that matter for engagement).
+ */
+export async function getDailyActivity(workspaceId, { days = 30 } = {}) {
+  const s = init();
+  if (!s) return [];
+  const n = Math.min(Math.max(Number(days) || 30, 1), 365);
+
+  // generate_series + LEFT JOIN gives us zero-rows for empty days without
+  // having to fabricate them in JS. Truncate to day boundaries so the
+  // bars don't get sliced weirdly across timezone offsets.
+  const rows = await s`
+    WITH days AS (
+      SELECT generate_series(
+        date_trunc('day', NOW() - ${n}::int * INTERVAL '1 day'),
+        date_trunc('day', NOW()),
+        INTERVAL '1 day'
+      )::date AS day
+    ),
+    counts AS (
+      SELECT date_trunc('day', created_at)::date AS day,
+             COUNT(*) FILTER (WHERE event = 'card_rendered')::int AS renders,
+             COUNT(*) FILTER (WHERE event = 'item_clicked')::int  AS clicks
+      FROM events
+      WHERE workspace_id = ${workspaceId}
+        AND created_at >= NOW() - ${n}::int * INTERVAL '1 day'
+      GROUP BY day
+    )
+    SELECT d.day,
+           COALESCE(c.renders, 0) AS renders,
+           COALESCE(c.clicks,  0) AS clicks
+    FROM days d
+    LEFT JOIN counts c ON c.day = d.day
+    ORDER BY d.day
+  `;
+  return rows.map((r) => ({
+    day: r.day,
+    renders: r.renders,
+    clicks: r.clicks,
+  }));
+}
+
+/**
+ * Per-contact daily click counts over a short window. Used to render
+ * row sparklines next to engaged-visitor names. One batched query
+ * covers all contact IDs to avoid N+1.
+ *
+ * Returns Map(contactId → [{ day, clicks }, ...]) with zero-filled days.
+ */
+export async function getUserSparklines(workspaceId, contactIds, { days = 7 } = {}) {
+  const s = init();
+  if (!s || !Array.isArray(contactIds) || contactIds.length === 0) return new Map();
+  const n = Math.min(Math.max(Number(days) || 7, 1), 30);
+
+  const rows = await s`
+    SELECT metadata->>'contact_id' AS contact_id,
+           date_trunc('day', created_at)::date AS day,
+           COUNT(*)::int AS clicks
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND event = 'item_clicked'
+      AND metadata->>'contact_id' = ANY(${contactIds})
+      AND created_at >= NOW() - ${n}::int * INTERVAL '1 day'
+    GROUP BY metadata->>'contact_id', day
+  `;
+
+  // Build a base zero-filled timeline once and clone per user.
+  const baseDays = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - i);
+    baseDays.push(d.toISOString().slice(0, 10));
+  }
+  const out = new Map();
+  for (const id of contactIds) {
+    out.set(id, baseDays.map((day) => ({ day, clicks: 0 })));
+  }
+  for (const r of rows) {
+    const arr = out.get(r.contact_id);
+    if (!arr) continue;
+    const key = new Date(r.day).toISOString().slice(0, 10);
+    const slot = arr.find((d) => d.day === key);
+    if (slot) slot.clicks = r.clicks;
+  }
+  return out;
+}
+
+/**
+ * Aggregate counts for the period IMMEDIATELY PRIOR to the current window
+ * of equal length. Used to render % change badges on the KPI cards.
+ *
+ *   current  window:   [NOW() - days .... NOW()]
+ *   previous window:   [NOW() - 2*days .. NOW() - days]
+ *
+ * Returns { cardsRendered, itemClicks, configureSaved } for the prior window,
+ * or all-zeros if DB unavailable.
+ */
+export async function getPriorPeriodCounts(workspaceId, { days = 30 } = {}) {
+  const s = init();
+  if (!s) return { cardsRendered: 0, itemClicks: 0, configureSaved: 0, uniqueVisitors: 0 };
+  const n = Math.min(Math.max(Number(days) || 30, 1), 365);
+
+  const rows = await s`
+    SELECT event, COUNT(*)::int AS count
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND created_at >= NOW() - (2 * ${n})::int * INTERVAL '1 day'
+      AND created_at <  NOW() - ${n}::int * INTERVAL '1 day'
+    GROUP BY event
+  `;
+  const byEvent = Object.fromEntries(rows.map((r) => [r.event, r.count]));
+
+  const [uniq] = await s`
+    SELECT COUNT(DISTINCT metadata->>'contact_id')::int AS n
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND metadata->>'contact_id' IS NOT NULL
+      AND created_at >= NOW() - (2 * ${n})::int * INTERVAL '1 day'
+      AND created_at <  NOW() - ${n}::int * INTERVAL '1 day'
+  `;
+
+  return {
+    cardsRendered: byEvent.card_rendered || 0,
+    itemClicks: byEvent.item_clicked || 0,
+    configureSaved: byEvent.configure_saved || 0,
+    uniqueVisitors: uniq?.n || 0,
+  };
+}
+
+/**
  * Top N shops by total click count. Aggregates events by resolveShop(),
  * which means it works regardless of which Intercom custom-attribute key
  * holds the myshopify domain. Used by the "Engagement by shop" section
@@ -263,6 +396,7 @@ export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } 
   const rows = await s`
     SELECT
       event,
+      created_at,
       metadata->>'contact_id'      AS contact_id,
       metadata->>'contact_user_id' AS contact_user_id,
       metadata->'contact_custom_attributes' AS contact_attrs,
@@ -279,6 +413,18 @@ export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } 
       )
   `;
 
+  // For sparklines: build a 7-day click timeline per shop while we're
+  // already iterating events. Defaults to the LAST 7 DAYS of the window,
+  // not the whole window — sparklines work best at consistent length so
+  // rows can be compared visually regardless of the selected days filter.
+  const sparkDays = 7;
+  const sparkStart = new Date(Date.now() - sparkDays * 86400000);
+  const baseSpark = [];
+  for (let i = sparkDays - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    baseSpark.push({ day: d.toISOString().slice(0, 10), clicks: 0 });
+  }
+
   const byShop = new Map();
   for (const r of rows) {
     const shop = resolveShop({
@@ -288,11 +434,26 @@ export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } 
       company_name: r.company_name,
     });
     if (!shop) continue;
-    if (!byShop.has(shop)) byShop.set(shop, { shop, clicks: 0, renders: 0, contactIds: new Set() });
+    if (!byShop.has(shop)) {
+      byShop.set(shop, {
+        shop,
+        clicks: 0,
+        renders: 0,
+        contactIds: new Set(),
+        sparkline: baseSpark.map((d) => ({ ...d })),
+      });
+    }
     const bucket = byShop.get(shop);
     if (r.event === 'item_clicked') bucket.clicks++;
     else if (r.event === 'card_rendered') bucket.renders++;
     if (r.contact_id) bucket.contactIds.add(r.contact_id);
+
+    // If the event landed inside the 7-day sparkline window, bump its day.
+    if (r.event === 'item_clicked' && r.created_at >= sparkStart) {
+      const key = new Date(r.created_at).toISOString().slice(0, 10);
+      const slot = bucket.sparkline.find((d) => d.day === key);
+      if (slot) slot.clicks++;
+    }
   }
 
   return Array.from(byShop.values())
@@ -301,6 +462,7 @@ export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } 
       clicks: b.clicks,
       renders: b.renders,
       uniqueVisitors: b.contactIds.size,
+      sparkline: b.sparkline,
     }))
     .sort((a, b) =>
       b.clicks - a.clicks ||

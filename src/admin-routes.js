@@ -21,9 +21,12 @@
 import {
   dbAvailable,
   getAnalytics,
+  getDailyActivity,
   getEngagedUsers,
   getEngagementByShop,
+  getPriorPeriodCounts,
   getTopItemsWithClickers,
+  getUserSparklines,
   getUserTimeline,
   recentEvents,
 } from './db/index.js';
@@ -69,14 +72,32 @@ export function registerAdminRoutes(app) {
     const days = Math.min(Math.max(requested, 1), 365);
     const showPii = truthyParam(req.query.show_pii);
 
-    // Four queries in parallel — none depend on each other.
-    const [data, engaged, itemsWithClickers, byShop] = await Promise.all([
+    // Six independent queries in parallel — none depend on each other.
+    const [
+      data,
+      engaged,
+      itemsWithClickers,
+      byShop,
+      daily,
+      prior,
+    ] = await Promise.all([
       getAnalytics(req.params.workspaceId, { days }),
       getEngagedUsers(req.params.workspaceId, { days, limit: 5 }),
       getTopItemsWithClickers(req.params.workspaceId, { days, limit: 5 }),
       getEngagementByShop(req.params.workspaceId, { days, limit: 5 }),
+      getDailyActivity(req.params.workspaceId, { days }),
+      getPriorPeriodCounts(req.params.workspaceId, { days }),
     ]);
     if (!data) return res.status(404).json({ error: 'no events for this workspace yet' });
+
+    // Attach per-user sparklines as a second round-trip (depends on the
+    // engaged list, so it can't go in the Promise.all above).
+    const contactIds = engaged.map((u) => u.contactId).filter(Boolean);
+    const userSparklines = await getUserSparklines(req.params.workspaceId, contactIds, { days: 7 });
+    const engagedWithSpark = engaged.map((u) => ({
+      ...u,
+      sparkline: userSparklines.get(u.contactId) || [],
+    }));
 
     const wantsHtml =
       req.query.format === 'html' ||
@@ -84,7 +105,14 @@ export function registerAdminRoutes(app) {
     if (wantsHtml) {
       res.type('html').send(
         analyticsHtml(
-          { ...data, engagedUsers: engaged, itemsWithClickers, engagementByShop: byShop },
+          {
+            ...data,
+            engagedUsers: engagedWithSpark,
+            itemsWithClickers,
+            engagementByShop: byShop,
+            dailyActivity: daily,
+            priorPeriod: prior,
+          },
           { token: tokenFrom(req), showPii },
         ),
       );
@@ -98,12 +126,14 @@ export function registerAdminRoutes(app) {
     // is to be able to see them in a list.
     res.json({
       ...data,
-      engagedUsers: engaged.map((u) => maskUser(u, showPii)),
+      engagedUsers: engagedWithSpark.map((u) => maskUser(u, showPii)),
       itemsWithClickers: itemsWithClickers.map((it) => ({
         ...it,
         clickers: it.clickers.map((c) => maskUser(c, showPii)),
       })),
       engagementByShop: byShop,
+      dailyActivity: daily,
+      priorPeriod: prior,
     });
   });
 
@@ -183,6 +213,150 @@ const escape = (s) =>
 const fmt = (n) => Number(n || 0).toLocaleString('en-US');
 const pct = (n) => `${(Number(n || 0) * 100).toFixed(1)}%`;
 const dt = (s) => (s ? new Date(s).toISOString().slice(0, 19).replace('T', ' ') + ' UTC' : '—');
+
+// ---------------------------------------------------------------------------
+// SVG chart renderers. All server-side, no JS, no external libraries.
+// Coral = clicks (the primary metric), blue = renders (the secondary one).
+// ---------------------------------------------------------------------------
+
+const COLOR_CLICKS = '#F43F5E';   // coral
+const COLOR_RENDERS = '#60A5FA';  // soft blue
+const COLOR_AXIS = '#CBD5E1';
+const COLOR_LABEL = '#64748B';
+
+/**
+ * Big daily activity chart. Side-by-side bars per day, coral for clicks
+ * and blue for renders. Auto-scales Y to max value. Three X-axis labels
+ * (start / middle / end) so it stays readable at any window length.
+ */
+function dailyChartSvg(daily) {
+  const W = 940;
+  const H = 240;
+  const PAD = { top: 16, right: 16, bottom: 36, left: 32 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+
+  if (!Array.isArray(daily) || daily.length === 0) {
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" class="chart">
+      <text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="${COLOR_LABEL}" font-family="-apple-system,sans-serif" font-size="13">No activity data yet.</text>
+    </svg>`;
+  }
+
+  const maxVal = Math.max(1, ...daily.map((d) => Math.max(d.renders, d.clicks)));
+  // Nice round-up for the Y axis upper bound.
+  const yMax = niceCeil(maxVal);
+
+  const slotW = innerW / daily.length;
+  const barW = Math.max(2, slotW * 0.36);
+  const barGap = slotW * 0.08;
+
+  // Y-axis ticks at 0, half, full.
+  const yTicks = [0, Math.round(yMax / 2), yMax];
+  const yTickLines = yTicks
+    .map((v) => {
+      const y = PAD.top + innerH - (v / yMax) * innerH;
+      return `
+        <line x1="${PAD.left}" x2="${W - PAD.right}" y1="${y}" y2="${y}" stroke="${COLOR_AXIS}" stroke-width="1" stroke-dasharray="2,3" opacity="0.5" />
+        <text x="${PAD.left - 6}" y="${y + 4}" text-anchor="end" fill="${COLOR_LABEL}" font-family="ui-monospace,monospace" font-size="10">${v}</text>
+      `;
+    })
+    .join('');
+
+  // Bars: render bar (blue, behind) + click bar (coral) per day.
+  const bars = daily
+    .map((d, i) => {
+      const x0 = PAD.left + i * slotW + (slotW - barW * 2 - barGap) / 2;
+      const renderH = (d.renders / yMax) * innerH;
+      const clickH = (d.clicks / yMax) * innerH;
+      const yR = PAD.top + innerH - renderH;
+      const yC = PAD.top + innerH - clickH;
+      return `
+        <rect x="${x0}" y="${yR}" width="${barW}" height="${renderH}" fill="${COLOR_RENDERS}" rx="1.5" />
+        <rect x="${x0 + barW + barGap}" y="${yC}" width="${barW}" height="${clickH}" fill="${COLOR_CLICKS}" rx="1.5" />
+      `;
+    })
+    .join('');
+
+  // X-axis labels: first / middle / last. Skip middle if window is small.
+  const labelIndices = daily.length >= 5 ? [0, Math.floor(daily.length / 2), daily.length - 1] : [0, daily.length - 1];
+  const xLabels = labelIndices
+    .map((i) => {
+      const x = PAD.left + i * slotW + slotW / 2;
+      const label = new Date(daily[i].day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `<text x="${x}" y="${H - 16}" text-anchor="middle" fill="${COLOR_LABEL}" font-family="-apple-system,sans-serif" font-size="11">${label}</text>`;
+    })
+    .join('');
+
+  // Bottom-axis baseline.
+  const baseline = `<line x1="${PAD.left}" x2="${W - PAD.right}" y1="${PAD.top + innerH}" y2="${PAD.top + innerH}" stroke="${COLOR_AXIS}" stroke-width="1.5" />`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" class="chart">
+    ${yTickLines}
+    ${baseline}
+    ${bars}
+    ${xLabels}
+  </svg>`;
+}
+
+/**
+ * Tiny sparkline — small inline SVG showing a 7-day click trend.
+ * Used per-row in the engaged-users and shops tables so you can spot
+ * who's trending up vs cooling off at a glance.
+ */
+function sparklineSvg(points, { width = 80, height = 24 } = {}) {
+  if (!Array.isArray(points) || points.length === 0) {
+    return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" class="spark"></svg>`;
+  }
+  const max = Math.max(1, ...points.map((p) => p.clicks));
+  const slotW = width / Math.max(1, points.length - 1);
+  const coords = points
+    .map((p, i) => {
+      const x = i * slotW;
+      const y = height - (p.clicks / max) * (height - 4) - 2;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  // Area under the line, semi-transparent. Plus the line itself on top.
+  const area = `${0},${height} ${coords} ${width},${height}`;
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" class="spark">
+    <polygon points="${area}" fill="${COLOR_CLICKS}" opacity="0.15" />
+    <polyline points="${coords}" fill="none" stroke="${COLOR_CLICKS}" stroke-width="1.5" stroke-linejoin="round" />
+  </svg>`;
+}
+
+/**
+ * Period-over-period change badge. Shown next to KPI values.
+ * Coral up-arrow for growth, slate down-arrow for decline, no badge
+ * when the prior period was zero (no meaningful baseline to compare).
+ */
+function deltaBadge(current, prior) {
+  if (!prior || prior === 0) {
+    if (current > 0) return `<span class="delta delta--new">NEW</span>`;
+    return '';
+  }
+  const pctChange = ((current - prior) / prior) * 100;
+  if (Math.abs(pctChange) < 1) return `<span class="delta delta--flat">±0%</span>`;
+  const up = pctChange > 0;
+  const arrow = up ? '↑' : '↓';
+  const rounded = Math.abs(pctChange) >= 100
+    ? Math.round(pctChange)
+    : Math.round(pctChange * 10) / 10;
+  return `<span class="delta delta--${up ? 'up' : 'down'}">${arrow} ${Math.abs(rounded)}%</span>`;
+}
+
+// Round up to a "nice" number for Y-axis: 1 → 1, 4 → 5, 7 → 10, 15 → 20,
+// 73 → 80, 175 → 200. Avoids ugly axis labels like "y=7" on auto-scaling.
+function niceCeil(n) {
+  if (n <= 1) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(n)));
+  const norm = n / pow;
+  let nice;
+  if (norm <= 1) nice = 1;
+  else if (norm <= 2) nice = 2;
+  else if (norm <= 5) nice = 5;
+  else nice = 10;
+  return nice * pow;
+}
 
 // Render a shop value. Auto-detects whether it looks like a myshopify
 // domain and styles it as code; otherwise shows it plain. Null/empty
@@ -306,10 +480,42 @@ const sharedStyle = `
   .event-pill--config { background: #FEF3C7; color: #92400E; }
   .event-pill--other { background: var(--ink-100); color: var(--ink-700); }
   .pii-banner {
-    background: ${'#FEF3C7'}; border: 1px solid #F59E0B; color: #92400E;
+    background: #FEF3C7; border: 1px solid #F59E0B; color: #92400E;
     padding: 10px 14px; border-radius: 8px; font-size: 0.84rem;
     margin-bottom: 18px; font-weight: 500;
   }
+  .chart-card {
+    background: white; border: 1px solid var(--ink-100);
+    border-radius: 10px; padding: 18px 18px 14px;
+    margin-bottom: 32px;
+  }
+  .chart-card__head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .chart-card__title { font-size: 0.92rem; font-weight: 700; color: var(--ink-700); }
+  .chart-card__legend { font-size: 0.78rem; color: var(--ink-500); }
+  .chart-card__legend .sw {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 5px; vertical-align: -1px;
+  }
+  .chart-card__legend .sw--clicks  { background: ${COLOR_CLICKS}; }
+  .chart-card__legend .sw--renders { background: ${COLOR_RENDERS}; }
+  .chart-card__legend span + span { margin-left: 12px; }
+  .chart { width: 100%; height: auto; display: block; }
+  .spark { vertical-align: middle; }
+  .delta {
+    display: inline-block;
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 0.7rem; font-weight: 800;
+    margin-left: 6px; vertical-align: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .delta--up   { background: #FEE2E2; color: ${COLOR_CLICKS}; }
+  .delta--down { background: #E0F2FE; color: #0369A1; }
+  .delta--flat { background: var(--ink-100); color: var(--ink-500); }
+  .delta--new  { background: #DCFCE7; color: #166534; }
+  .kpi__sub .delta { vertical-align: 1px; margin-left: 0; }
   .footer { margin-top: 32px; font-size: 0.78rem; color: var(--ink-500); text-align: center; }
   .footer code { background: var(--ink-100); padding: 1px 6px; border-radius: 4px; }
 `;
@@ -335,12 +541,13 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
           <td class="rank">${i + 1}</td>
           <td>${userLabel(u, { workspaceId: d.tenant.workspaceId, token })}</td>
           <td>${shopCell(u.shop)}</td>
+          <td>${sparklineSvg(u.sparkline || [])}</td>
           <td class="num">${fmt(u.clicks)}</td>
           <td class="num">${fmt(u.renders)}</td>
           <td class="num"><span class="muted">${dt(u.lastSeen).slice(0, 16)}</span></td>
         </tr>`)
         .join('')
-    : `<tr><td colspan="6" class="muted-cell">No identified visitors yet in this window.</td></tr>`;
+    : `<tr><td colspan="7" class="muted-cell">No identified visitors yet in this window.</td></tr>`;
 
   // Top-shops section. Only render if Intercom is actually sending shop
   // data — otherwise show a helpful empty-state explaining how to wire it.
@@ -350,16 +557,18 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
         <tr>
           <td class="rank">${i + 1}</td>
           <td>${shopCell(s.shop, { strong: true })}</td>
+          <td>${sparklineSvg(s.sparkline || [])}</td>
           <td class="num">${fmt(s.uniqueVisitors)}</td>
           <td class="num">${fmt(s.clicks)}</td>
           <td class="num">${fmt(s.renders)}</td>
         </tr>`)
         .join('')
-    : `<tr><td colspan="5" class="muted-cell">
+    : `<tr><td colspan="6" class="muted-cell">
          No shop attribution yet. Intercom contacts (or their companies) need a
-         <code>shopify_domain</code> custom attribute set for Loop to surface this.
-         Loop also recognises <code>shop_domain</code>, <code>myshopify_domain</code>,
-         <code>store_domain</code>, and a few others.
+         <code>shopify_domain</code> custom attribute set — or the myshopify
+         domain stored in Intercom's <code>user_id</code> field — for Loop to
+         surface this. Loop also recognises <code>shop_domain</code>,
+         <code>myshopify_domain</code>, <code>store_domain</code>, and a few others.
        </td></tr>`;
 
   const itemRows = items.length
@@ -420,24 +629,35 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
   <div class="grid">
     <div class="kpi kpi--accent">
       <div class="kpi__label">Cards rendered</div>
-      <div class="kpi__value">${fmt(d.period.cardsRendered)}</div>
-      <div class="kpi__sub">${fmt(d.allTime.cardsRendered)} all-time</div>
+      <div class="kpi__value">${fmt(d.period.cardsRendered)} ${deltaBadge(d.period.cardsRendered, d.priorPeriod?.cardsRendered)}</div>
+      <div class="kpi__sub">${fmt(d.priorPeriod?.cardsRendered || 0)} in prior ${d.periodDays} days</div>
     </div>
     <div class="kpi">
       <div class="kpi__label">Unique visitors</div>
-      <div class="kpi__value">${fmt(d.period.uniqueVisitors)}</div>
-      <div class="kpi__sub">distinct contacts</div>
+      <div class="kpi__value">${fmt(d.period.uniqueVisitors)} ${deltaBadge(d.period.uniqueVisitors, d.priorPeriod?.uniqueVisitors)}</div>
+      <div class="kpi__sub">${fmt(d.priorPeriod?.uniqueVisitors || 0)} in prior ${d.periodDays} days</div>
     </div>
     <div class="kpi">
       <div class="kpi__label">Item clicks</div>
-      <div class="kpi__value">${fmt(d.period.itemClicks)}</div>
-      <div class="kpi__sub">${fmt(d.allTime.itemClicks)} all-time</div>
+      <div class="kpi__value">${fmt(d.period.itemClicks)} ${deltaBadge(d.period.itemClicks, d.priorPeriod?.itemClicks)}</div>
+      <div class="kpi__sub">${fmt(d.priorPeriod?.itemClicks || 0)} in prior ${d.periodDays} days</div>
     </div>
     <div class="kpi">
       <div class="kpi__label">Click-through rate</div>
       <div class="kpi__value">${pct(d.period.clickThroughRate)}</div>
       <div class="kpi__sub">clicks ÷ renders</div>
     </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card__head">
+      <div class="chart-card__title">Daily activity (last ${d.periodDays} days)</div>
+      <div class="chart-card__legend">
+        <span><span class="sw sw--clicks"></span>Clicks</span>
+        <span><span class="sw sw--renders"></span>Renders</span>
+      </div>
+    </div>
+    ${dailyChartSvg(d.dailyActivity || [])}
   </div>
 
   <h2>Most engaged visitors (last ${d.periodDays} days)</h2>
@@ -447,6 +667,7 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
         <th>#</th>
         <th>Visitor</th>
         <th>Shop</th>
+        <th style="width: 100px;">7-day trend</th>
         <th class="num">Item clicks</th>
         <th class="num">Renders</th>
         <th class="num">Last seen</th>
@@ -461,6 +682,7 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
       <tr>
         <th>#</th>
         <th>Shop</th>
+        <th style="width: 100px;">7-day trend</th>
         <th class="num">Unique visitors</th>
         <th class="num">Clicks</th>
         <th class="num">Renders</th>
