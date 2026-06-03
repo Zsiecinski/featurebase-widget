@@ -57,6 +57,13 @@ function truthyParam(v) {
   return v === '1' || v === 'true';
 }
 
+// Normalise the ?theme= param. Accepts 'dark' or 'light'; anything else
+// (incl. missing) means "auto" — let prefers-color-scheme decide via CSS.
+function themeFrom(req) {
+  const t = req.query.theme;
+  return t === 'dark' || t === 'light' ? t : null;
+}
+
 export function registerAdminRoutes(app) {
   app.get('/admin/events', requireAdminToken, async (req, res) => {
     if (!dbAvailable()) return res.json({ events: [], note: 'DB not configured' });
@@ -113,7 +120,7 @@ export function registerAdminRoutes(app) {
             dailyActivity: daily,
             priorPeriod: prior,
           },
-          { token: tokenFrom(req), showPii },
+          { token: tokenFrom(req), showPii, theme: themeFrom(req) },
         ),
       );
       return;
@@ -154,6 +161,7 @@ export function registerAdminRoutes(app) {
           workspaceId: req.params.workspaceId,
           token: tokenFrom(req),
           showPii,
+          theme: themeFrom(req),
         }),
       );
       return;
@@ -219,10 +227,10 @@ const dt = (s) => (s ? new Date(s).toISOString().slice(0, 19).replace('T', ' ') 
 // Coral = clicks (the primary metric), blue = renders (the secondary one).
 // ---------------------------------------------------------------------------
 
-const COLOR_CLICKS = '#F43F5E';   // coral
-const COLOR_RENDERS = '#60A5FA';  // soft blue
-const COLOR_AXIS = '#CBD5E1';
-const COLOR_LABEL = '#64748B';
+// SVG renderers use CSS classes (.bar-clicks, .bar-renders, .axis-line,
+// .axis-label, .spark-line, .spark-area) instead of hardcoded fills/strokes.
+// CSS variables in the theme block decide the actual colors, so charts
+// switch between light and dark mode without re-rendering server-side.
 
 /**
  * Big daily activity chart. Side-by-side bars per day, coral for clicks
@@ -238,7 +246,7 @@ function dailyChartSvg(daily) {
 
   if (!Array.isArray(daily) || daily.length === 0) {
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" class="chart">
-      <text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="${COLOR_LABEL}" font-family="-apple-system,sans-serif" font-size="13">No activity data yet.</text>
+      <text x="${W / 2}" y="${H / 2}" text-anchor="middle" class="axis-label" font-family="-apple-system,sans-serif" font-size="13">No activity data yet.</text>
     </svg>`;
   }
 
@@ -256,8 +264,8 @@ function dailyChartSvg(daily) {
     .map((v) => {
       const y = PAD.top + innerH - (v / yMax) * innerH;
       return `
-        <line x1="${PAD.left}" x2="${W - PAD.right}" y1="${y}" y2="${y}" stroke="${COLOR_AXIS}" stroke-width="1" stroke-dasharray="2,3" opacity="0.5" />
-        <text x="${PAD.left - 6}" y="${y + 4}" text-anchor="end" fill="${COLOR_LABEL}" font-family="ui-monospace,monospace" font-size="10">${v}</text>
+        <line x1="${PAD.left}" x2="${W - PAD.right}" y1="${y}" y2="${y}" class="axis-line" stroke-width="1" stroke-dasharray="2,3" opacity="0.5" />
+        <text x="${PAD.left - 6}" y="${y + 4}" text-anchor="end" class="axis-label" font-family="ui-monospace,monospace" font-size="10">${v}</text>
       `;
     })
     .join('');
@@ -271,8 +279,8 @@ function dailyChartSvg(daily) {
       const yR = PAD.top + innerH - renderH;
       const yC = PAD.top + innerH - clickH;
       return `
-        <rect x="${x0}" y="${yR}" width="${barW}" height="${renderH}" fill="${COLOR_RENDERS}" rx="1.5" />
-        <rect x="${x0 + barW + barGap}" y="${yC}" width="${barW}" height="${clickH}" fill="${COLOR_CLICKS}" rx="1.5" />
+        <rect x="${x0}" y="${yR}" width="${barW}" height="${renderH}" class="bar-renders" rx="1.5" />
+        <rect x="${x0 + barW + barGap}" y="${yC}" width="${barW}" height="${clickH}" class="bar-clicks" rx="1.5" />
       `;
     })
     .join('');
@@ -283,12 +291,12 @@ function dailyChartSvg(daily) {
     .map((i) => {
       const x = PAD.left + i * slotW + slotW / 2;
       const label = new Date(daily[i].day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      return `<text x="${x}" y="${H - 16}" text-anchor="middle" fill="${COLOR_LABEL}" font-family="-apple-system,sans-serif" font-size="11">${label}</text>`;
+      return `<text x="${x}" y="${H - 16}" text-anchor="middle" class="axis-label" font-family="-apple-system,sans-serif" font-size="11">${label}</text>`;
     })
     .join('');
 
   // Bottom-axis baseline.
-  const baseline = `<line x1="${PAD.left}" x2="${W - PAD.right}" y1="${PAD.top + innerH}" y2="${PAD.top + innerH}" stroke="${COLOR_AXIS}" stroke-width="1.5" />`;
+  const baseline = `<line x1="${PAD.left}" x2="${W - PAD.right}" y1="${PAD.top + innerH}" y2="${PAD.top + innerH}" class="axis-line" stroke-width="1.5" />`;
 
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" class="chart">
     ${yTickLines}
@@ -319,8 +327,8 @@ function sparklineSvg(points, { width = 80, height = 24 } = {}) {
   // Area under the line, semi-transparent. Plus the line itself on top.
   const area = `${0},${height} ${coords} ${width},${height}`;
   return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" class="spark">
-    <polygon points="${area}" fill="${COLOR_CLICKS}" opacity="0.15" />
-    <polyline points="${coords}" fill="none" stroke="${COLOR_CLICKS}" stroke-width="1.5" stroke-linejoin="round" />
+    <polygon points="${area}" class="spark-area" />
+    <polyline points="${coords}" fill="none" class="spark-line" stroke-width="1.5" stroke-linejoin="round" />
   </svg>`;
 }
 
@@ -397,15 +405,100 @@ function piiToggleUrl(req, showPii, basePath) {
 
 // Shared <style> block for both pages.
 const sharedStyle = `
+  /* ─── Light theme (default) ──────────────────────────────────────── */
   :root {
-    --coral: #F43F5E; --coral-deep: #BE123C;
-    --ink-100: #F1F5F9; --ink-300: #CBD5E1;
-    --ink-500: #64748B; --ink-700: #334155; --ink-900: #0F172A;
+    --bg: #F8FAFC;
+    --card-bg: #FFFFFF;
+    --table-head-bg: #F8FAFC;
+    --border: #F1F5F9;
+    --border-strong: #E2E8F0;
+    --text: #0F172A;
+    --text-secondary: #334155;
+    --text-muted: #64748B;
+    --text-light: #94A3B8;
+    --code-bg: #F1F5F9;
+    --coral: #F43F5E;
+    --coral-deep: #BE123C;
+    --coral-bg: #FEE2E2;
+    --blue: #60A5FA;
+    --blue-deep: #1D4ED8;
+    --blue-bg: #DBEAFE;
+    --amber-bg: #FEF3C7;
+    --amber-border: #F59E0B;
+    --amber-text: #92400E;
+    --green-bg: #DCFCE7;
+    --green-text: #166534;
+    --shadow: 0 0 0 1px rgba(15, 23, 42, 0.04);
+    --chart-axis: #CBD5E1;
+    --chart-label: #64748B;
   }
+
+  /* ─── Dark theme (explicit override) ──────────────────────────────── */
+  :root[data-theme="dark"] {
+    --bg: #0B1220;
+    --card-bg: #1E293B;
+    --table-head-bg: #182234;
+    --border: #334155;
+    --border-strong: #475569;
+    --text: #F1F5F9;
+    --text-secondary: #CBD5E1;
+    --text-muted: #94A3B8;
+    --text-light: #64748B;
+    --code-bg: #334155;
+    --coral: #FB7185;
+    --coral-deep: #FDA4AF;
+    --coral-bg: #4C1D2A;
+    --blue: #93C5FD;
+    --blue-deep: #BFDBFE;
+    --blue-bg: #1E3A8A;
+    --amber-bg: #422006;
+    --amber-border: #B45309;
+    --amber-text: #FCD34D;
+    --green-bg: #14532D;
+    --green-text: #BBF7D0;
+    --shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+    --chart-axis: #475569;
+    --chart-label: #94A3B8;
+  }
+
+  /* Auto dark mode when OS prefers it AND no explicit theme is set.
+     Mirrors the [data-theme="dark"] block above. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0B1220;
+      --card-bg: #1E293B;
+      --table-head-bg: #182234;
+      --border: #334155;
+      --border-strong: #475569;
+      --text: #F1F5F9;
+      --text-secondary: #CBD5E1;
+      --text-muted: #94A3B8;
+      --text-light: #64748B;
+      --code-bg: #334155;
+      --coral: #FB7185;
+      --coral-deep: #FDA4AF;
+      --coral-bg: #4C1D2A;
+      --blue: #93C5FD;
+      --blue-deep: #BFDBFE;
+      --blue-bg: #1E3A8A;
+      --amber-bg: #422006;
+      --amber-border: #B45309;
+      --amber-text: #FCD34D;
+      --green-bg: #14532D;
+      --green-text: #BBF7D0;
+      --shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+      --chart-axis: #475569;
+      --chart-label: #94A3B8;
+    }
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { color-scheme: light dark; }
+  html[data-theme="light"] { color-scheme: light; }
+  html[data-theme="dark"]  { color-scheme: dark; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
-    background: #F8FAFC; color: var(--ink-900);
+    background: var(--bg); color: var(--text);
     padding: 32px 24px 64px; line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
@@ -413,9 +506,9 @@ const sharedStyle = `
   h1 { font-size: 1.65rem; letter-spacing: -0.02em; margin-bottom: 4px; }
   h2 {
     font-size: 1rem; font-weight: 800; letter-spacing: -0.01em;
-    margin: 8px 0 12px; color: var(--ink-700);
+    margin: 8px 0 12px; color: var(--text-secondary);
   }
-  .sub { color: var(--ink-500); font-size: 0.9rem; margin-bottom: 8px; }
+  .sub { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 8px; }
   .ws-pill {
     display: inline-block; background: var(--coral); color: white;
     padding: 4px 10px; border-radius: 6px;
@@ -426,66 +519,68 @@ const sharedStyle = `
     display: grid; gap: 14px; margin-bottom: 32px;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
-  .kpi { background: white; border: 1px solid var(--ink-100); border-radius: 10px; padding: 16px 18px; }
-  .kpi__label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-500); font-weight: 700; margin-bottom: 6px; }
-  .kpi__value { font-size: 1.65rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-900); }
-  .kpi__sub { font-size: 0.78rem; color: var(--ink-500); margin-top: 4px; }
+  .kpi { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .kpi__label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; }
+  .kpi__value { font-size: 1.65rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .kpi__sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
   .kpi--accent .kpi__value { color: var(--coral-deep); }
   table {
-    width: 100%; border-collapse: collapse; background: white;
-    border: 1px solid var(--ink-100); border-radius: 10px;
+    width: 100%; border-collapse: collapse; background: var(--card-bg);
+    border: 1px solid var(--border); border-radius: 10px;
     overflow: hidden; margin-bottom: 32px; font-size: 0.92rem;
   }
   th, td { padding: 10px 14px; text-align: left; vertical-align: top; }
   th {
-    background: #F8FAFC; font-size: 0.7rem; text-transform: uppercase;
-    letter-spacing: 0.06em; color: var(--ink-500); border-bottom: 1px solid var(--ink-100);
+    background: var(--table-head-bg); font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); border-bottom: 1px solid var(--border);
   }
-  tr:not(:last-child) td { border-bottom: 1px solid var(--ink-100); }
+  tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
   .num { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
-  .rank { width: 32px; color: var(--ink-500); font-weight: 700; text-align: center; }
-  .muted { color: var(--ink-500); font-style: italic; }
-  .muted-cell { color: var(--ink-500); font-style: italic; text-align: center; padding: 18px; }
+  .rank { width: 32px; color: var(--text-muted); font-weight: 700; text-align: center; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .muted-cell { color: var(--text-muted); font-style: italic; text-align: center; padding: 18px; }
   a { color: var(--coral-deep); text-decoration: none; font-weight: 600; }
   a:hover { text-decoration: underline; }
-  .email { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-weight: 500; color: var(--ink-700); }
-  .clicker-list { font-size: 0.84rem; color: var(--ink-700); line-height: 1.7; }
+  .email { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-weight: 500; color: var(--text-secondary); }
+  .clicker-list { font-size: 0.84rem; color: var(--text-secondary); line-height: 1.7; }
   .clicker-list .clicker { display: block; padding: 2px 0; }
-  .clicker-list .count { color: var(--ink-500); font-variant-numeric: tabular-nums; }
+  .clicker-list .count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; color: var(--text); }
   .meta {
-    background: white; border: 1px solid var(--ink-100); border-radius: 10px;
-    padding: 18px 22px; margin-bottom: 24px; font-size: 0.88rem; color: var(--ink-700);
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin-bottom: 24px; font-size: 0.88rem; color: var(--text-secondary);
   }
-  .meta dt { color: var(--ink-500); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
-  .meta dd { margin-bottom: 12px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
-  .range-nav, .toolbar { margin-bottom: 18px; font-size: 0.82rem; color: var(--ink-500); }
+  .meta dt { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .meta dd { margin-bottom: 12px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: var(--text); }
+  .range-nav, .toolbar { margin-bottom: 18px; font-size: 0.82rem; color: var(--text-muted); }
   .range-nav a, .toolbar a, .toggle {
     display: inline-block; padding: 5px 12px; border-radius: 6px;
     font-weight: 600; text-decoration: none;
-    border: 1px solid var(--ink-100); color: var(--ink-700);
-    background: white; margin-right: 6px;
+    border: 1px solid var(--border); color: var(--text-secondary);
+    background: var(--card-bg); margin-right: 6px;
   }
   .range-nav a.active { background: var(--coral); color: white; border-color: var(--coral); }
-  .toggle--on { background: var(--ink-900); color: white; border-color: var(--ink-900); }
-  .toggle--off { background: white; }
+  .toggle--on { background: var(--text); color: var(--card-bg); border-color: var(--text); }
+  .toggle--off { background: var(--card-bg); }
   .toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .toolbar-right { display: flex; gap: 6px; align-items: center; }
   .timeline-row td { font-size: 0.88rem; }
   .timeline-row .event-pill {
     display: inline-block; padding: 2px 8px; border-radius: 4px;
     font-size: 0.7rem; font-weight: 800; text-transform: uppercase;
     letter-spacing: 0.06em;
   }
-  .event-pill--click { background: #FEE2E2; color: var(--coral-deep); }
-  .event-pill--render { background: #DBEAFE; color: #1D4ED8; }
-  .event-pill--config { background: #FEF3C7; color: #92400E; }
-  .event-pill--other { background: var(--ink-100); color: var(--ink-700); }
+  .event-pill--click  { background: var(--coral-bg); color: var(--coral-deep); }
+  .event-pill--render { background: var(--blue-bg);  color: var(--blue-deep);  }
+  .event-pill--config { background: var(--amber-bg); color: var(--amber-text); }
+  .event-pill--other  { background: var(--border);   color: var(--text-secondary); }
   .pii-banner {
-    background: #FEF3C7; border: 1px solid #F59E0B; color: #92400E;
+    background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber-text);
     padding: 10px 14px; border-radius: 8px; font-size: 0.84rem;
     margin-bottom: 18px; font-weight: 500;
   }
   .chart-card {
-    background: white; border: 1px solid var(--ink-100);
+    background: var(--card-bg); border: 1px solid var(--border);
     border-radius: 10px; padding: 18px 18px 14px;
     margin-bottom: 32px;
   }
@@ -493,17 +588,23 @@ const sharedStyle = `
     display: flex; justify-content: space-between; align-items: baseline;
     margin-bottom: 8px;
   }
-  .chart-card__title { font-size: 0.92rem; font-weight: 700; color: var(--ink-700); }
-  .chart-card__legend { font-size: 0.78rem; color: var(--ink-500); }
+  .chart-card__title { font-size: 0.92rem; font-weight: 700; color: var(--text-secondary); }
+  .chart-card__legend { font-size: 0.78rem; color: var(--text-muted); }
   .chart-card__legend .sw {
     display: inline-block; width: 10px; height: 10px; border-radius: 2px;
     margin-right: 5px; vertical-align: -1px;
   }
-  .chart-card__legend .sw--clicks  { background: ${COLOR_CLICKS}; }
-  .chart-card__legend .sw--renders { background: ${COLOR_RENDERS}; }
+  .chart-card__legend .sw--clicks  { background: var(--coral); }
+  .chart-card__legend .sw--renders { background: var(--blue); }
   .chart-card__legend span + span { margin-left: 12px; }
   .chart { width: 100%; height: auto; display: block; }
+  .chart .bar-clicks  { fill: var(--coral); }
+  .chart .bar-renders { fill: var(--blue); }
+  .chart .axis-line   { stroke: var(--chart-axis); }
+  .chart .axis-label  { fill: var(--chart-label); }
   .spark { vertical-align: middle; }
+  .spark .spark-line { stroke: var(--coral); }
+  .spark .spark-area { fill: var(--coral); opacity: 0.15; }
   .delta {
     display: inline-block;
     padding: 1px 6px; border-radius: 4px;
@@ -511,10 +612,10 @@ const sharedStyle = `
     margin-left: 6px; vertical-align: 4px;
     font-variant-numeric: tabular-nums;
   }
-  .delta--up   { background: #FEE2E2; color: ${COLOR_CLICKS}; }
-  .delta--down { background: #E0F2FE; color: #0369A1; }
-  .delta--flat { background: var(--ink-100); color: var(--ink-500); }
-  .delta--new  { background: #DCFCE7; color: #166534; }
+  .delta--up   { background: var(--coral-bg); color: var(--coral-deep); }
+  .delta--down { background: var(--blue-bg);  color: var(--blue-deep);  }
+  .delta--flat { background: var(--border);   color: var(--text-muted); }
+  .delta--new  { background: var(--green-bg); color: var(--green-text); }
   .kpi__sub .delta { vertical-align: 1px; margin-left: 0; }
   .footer { margin-top: 32px; font-size: 0.78rem; color: var(--ink-500); text-align: center; }
   .footer code { background: var(--ink-100); padding: 1px 6px; border-radius: 4px; }
@@ -523,9 +624,19 @@ const sharedStyle = `
 // ---------------------------------------------------------------------------
 // Main analytics dashboard.
 // ---------------------------------------------------------------------------
-function analyticsHtml(d, { token = '', showPii = false } = {}) {
+function analyticsHtml(d, { token = '', showPii = false, theme = null } = {}) {
   const tokenSuffix = token ? `&token=${encodeURIComponent(token)}` : '';
   const piiSuffix = showPii ? '&show_pii=1' : '';
+  const themeSuffix = theme ? `&theme=${theme}` : '';
+  // Toggle target: flip whatever is currently rendered. If no theme is
+  // set (auto), assume we're showing light and offer dark.
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  const themeToggleSuffix = `&theme=${nextTheme}`;
+  const themeLabel = theme === 'dark'
+    ? '☀ Light mode'
+    : theme === 'light'
+      ? '🌙 Dark mode'
+      : '🌙 Dark mode';
 
   // Pre-mask everything for HTML rendering.
   const engaged = (d.engagedUsers || []).map((u) => maskUser(u, showPii));
@@ -595,10 +706,11 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
     : `<tr><td colspan="4" class="muted-cell">No item clicks recorded yet in this window.</td></tr>`;
 
   return `<!doctype html>
-<html lang="en">
+<html lang="en"${theme ? ` data-theme="${theme}"` : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Loop analytics — ${escape(d.tenant.workspaceId)}</title>
 <style>${sharedStyle}</style>
 </head>
@@ -610,15 +722,20 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
 
   <div class="toolbar">
     <div class="range-nav">
-      <a class="${d.periodDays === 7   ? 'active' : ''}" href="?format=html&days=7${tokenSuffix}${piiSuffix}">7 days</a>
-      <a class="${d.periodDays === 30  ? 'active' : ''}" href="?format=html&days=30${tokenSuffix}${piiSuffix}">30 days</a>
-      <a class="${d.periodDays === 90  ? 'active' : ''}" href="?format=html&days=90${tokenSuffix}${piiSuffix}">90 days</a>
-      <a class="${d.periodDays === 365 ? 'active' : ''}" href="?format=html&days=365${tokenSuffix}${piiSuffix}">1 year</a>
+      <a class="${d.periodDays === 7   ? 'active' : ''}" href="?format=html&days=7${tokenSuffix}${piiSuffix}${themeSuffix}">7 days</a>
+      <a class="${d.periodDays === 30  ? 'active' : ''}" href="?format=html&days=30${tokenSuffix}${piiSuffix}${themeSuffix}">30 days</a>
+      <a class="${d.periodDays === 90  ? 'active' : ''}" href="?format=html&days=90${tokenSuffix}${piiSuffix}${themeSuffix}">90 days</a>
+      <a class="${d.periodDays === 365 ? 'active' : ''}" href="?format=html&days=365${tokenSuffix}${piiSuffix}${themeSuffix}">1 year</a>
     </div>
-    <a class="toggle ${showPii ? 'toggle--on' : 'toggle--off'}"
-       href="?format=html&days=${d.periodDays}${tokenSuffix}${showPii ? '' : '&show_pii=1'}">
-      ${showPii ? '🔓 Hide identities' : '🔒 Show full identities'}
-    </a>
+    <div class="toolbar-right">
+      <a class="toggle toggle--off" href="?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeToggleSuffix}">
+        ${themeLabel}
+      </a>
+      <a class="toggle ${showPii ? 'toggle--on' : 'toggle--off'}"
+         href="?format=html&days=${d.periodDays}${tokenSuffix}${themeSuffix}${showPii ? '' : '&show_pii=1'}">
+        ${showPii ? '🔓 Hide identities' : '🔒 Show full identities'}
+      </a>
+    </div>
   </div>
 
   ${showPii ? `
@@ -722,11 +839,20 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-user timeline page — same dual-theme treatment as the main dashboard.
 // Per-user timeline page. Reached from the dashboard by clicking a name.
 // ---------------------------------------------------------------------------
-function userTimelineHtml(d, { workspaceId, token = '', showPii = false } = {}) {
+function userTimelineHtml(d, { workspaceId, token = '', showPii = false, theme = null } = {}) {
   const tokenSuffix = token ? `&token=${encodeURIComponent(token)}` : '';
   const piiSuffix = showPii ? '&show_pii=1' : '';
+  const themeSuffix = theme ? `&theme=${theme}` : '';
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  const themeToggleSuffix = `&theme=${nextTheme}`;
+  const themeLabel = theme === 'dark'
+    ? '☀ Light mode'
+    : theme === 'light'
+      ? '🌙 Dark mode'
+      : '🌙 Dark mode';
   const u = maskUser(d.user, showPii);
 
   function eventPill(event) {
@@ -764,30 +890,36 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false } = {}) 
     : `<tr><td colspan="3" class="muted-cell">No events for this user in the last ${d.periodDays} days.</td></tr>`;
 
   return `<!doctype html>
-<html lang="en">
+<html lang="en"${theme ? ` data-theme="${theme}"` : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>${escape(u.name || u.email || u.contactId)} — Loop analytics</title>
 <style>${sharedStyle}</style>
 </head>
 <body>
 <div class="container">
-  <div class="sub"><a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}">← All analytics</a></div>
+  <div class="sub"><a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeSuffix}">← All analytics</a></div>
   <h1>${u.name ? escape(u.name) : '<span class="muted">Unnamed visitor</span>'}</h1>
   <div class="sub">${u.email ? `<span class="email">${escape(u.email)}</span> · ` : ''}${escape(u.type || 'visitor')}${d.user.shop ? ` · ${shopCell(d.user.shop)}` : ''} · Last ${d.periodDays} days</div>
   <div class="ws-pill">${escape(workspaceId)}</div>
 
   <div class="toolbar">
     <div class="range-nav">
-      <a class="${d.periodDays === 30  ? 'active' : ''}" href="?format=html&days=30${tokenSuffix}${piiSuffix}">30 days</a>
-      <a class="${d.periodDays === 90  ? 'active' : ''}" href="?format=html&days=90${tokenSuffix}${piiSuffix}">90 days</a>
-      <a class="${d.periodDays === 365 ? 'active' : ''}" href="?format=html&days=365${tokenSuffix}${piiSuffix}">1 year</a>
+      <a class="${d.periodDays === 30  ? 'active' : ''}" href="?format=html&days=30${tokenSuffix}${piiSuffix}${themeSuffix}">30 days</a>
+      <a class="${d.periodDays === 90  ? 'active' : ''}" href="?format=html&days=90${tokenSuffix}${piiSuffix}${themeSuffix}">90 days</a>
+      <a class="${d.periodDays === 365 ? 'active' : ''}" href="?format=html&days=365${tokenSuffix}${piiSuffix}${themeSuffix}">1 year</a>
     </div>
-    <a class="toggle ${showPii ? 'toggle--on' : 'toggle--off'}"
-       href="?format=html&days=${d.periodDays}${tokenSuffix}${showPii ? '' : '&show_pii=1'}">
-      ${showPii ? '🔓 Hide identities' : '🔒 Show full identities'}
-    </a>
+    <div class="toolbar-right">
+      <a class="toggle toggle--off" href="?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeToggleSuffix}">
+        ${themeLabel}
+      </a>
+      <a class="toggle ${showPii ? 'toggle--on' : 'toggle--off'}"
+         href="?format=html&days=${d.periodDays}${tokenSuffix}${themeSuffix}${showPii ? '' : '&show_pii=1'}">
+        ${showPii ? '🔓 Hide identities' : '🔒 Show full identities'}
+      </a>
+    </div>
   </div>
 
   ${showPii ? `
@@ -843,7 +975,7 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false } = {}) 
   <div class="footer">
     Loop internal analytics ·
     <a href="?format=json&days=${d.periodDays}${tokenSuffix}${piiSuffix}">view as JSON</a> ·
-    <a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}">back to dashboard</a>
+    <a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}${themeSuffix}">back to dashboard</a>
   </div>
 </div>
 </body>
