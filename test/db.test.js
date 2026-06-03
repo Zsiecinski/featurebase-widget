@@ -16,6 +16,9 @@ const {
   getUniqueVisitors,
   getTopItemsWithClickers,
   getUserTimeline,
+  getDailyActivity,
+  getUserSparklines,
+  getPriorPeriodCounts,
   resolveShop,
 } = await import('../src/db/index.js');
 
@@ -83,6 +86,34 @@ test('getUserTimeline: returns null when DATABASE_URL is unset', async () => {
 test('getEngagementByShop: returns [] when DATABASE_URL is unset', async () => {
   delete process.env.DATABASE_URL;
   assert.deepEqual(await getEngagementByShop('staytuned', { days: 30 }), []);
+});
+
+test('getDailyActivity: returns [] when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  assert.deepEqual(await getDailyActivity('staytuned', { days: 30 }), []);
+});
+
+test('getUserSparklines: returns empty Map when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  const result = await getUserSparklines('staytuned', ['abc'], { days: 7 });
+  assert.equal(result.size, 0);
+});
+
+test('getUserSparklines: returns empty Map when no contact IDs given', async () => {
+  delete process.env.DATABASE_URL;
+  const result = await getUserSparklines('staytuned', [], { days: 7 });
+  assert.equal(result.size, 0);
+});
+
+test('getPriorPeriodCounts: returns all-zeros when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  const result = await getPriorPeriodCounts('staytuned', { days: 30 });
+  assert.deepEqual(result, {
+    cardsRendered: 0,
+    itemClicks: 0,
+    configureSaved: 0,
+    uniqueVisitors: 0,
+  });
 });
 
 // ---------------------------------------------------------------------------
