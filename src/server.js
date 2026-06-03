@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { getChangelogs, getChangelogById, getInProgressPosts } from './featurebase.js';
 import { homeCanvas, detailCanvas, errorCanvas } from './canvas.js';
+import { registerAdminRoutes } from './admin-routes.js';
+import { dbAvailable, defaultWorkspaceId, logEvent } from './db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');
@@ -29,8 +31,17 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, mock: config.mock, uptime: process.uptime() });
+  res.json({
+    ok: true,
+    mock: config.mock,
+    uptime: process.uptime(),
+    db: dbAvailable(),
+  });
 });
+
+// Analytics dashboard at /admin/analytics/:workspace_id (HTML + JSON).
+// Gated by ADMIN_TOKEN env var — without it, the routes return 404.
+registerAdminRoutes(app);
 
 app.get('/favicon.svg', (_req, res) =>
   res.sendFile(path.join(assetsDir, 'favicon.svg')),
@@ -142,11 +153,20 @@ async function renderCanvas(req, res) {
     return res.send(configSavedResponse(saved));
   }
 
+  // workspaceId for analytics attribution. For the private single-tenant
+  // build there's only one — defaultWorkspaceId() (env-overridable).
+  const wsId = defaultWorkspaceId();
+
   try {
     // Item tapped — render the detail view of that entry.
     if (componentId.startsWith('item_')) {
       const entryId = componentId.slice('item_'.length);
       const entry = await getChangelogById(entryId);
+      // Fire-and-forget event log. Never await in hot path.
+      logEvent(wsId, 'item_clicked', {
+        item_id: entryId,
+        item_title: entry?.title || null,
+      }).catch(() => {});
       return res.send(detailCanvas(entry, { expanded, baseUrl }));
     }
 
@@ -159,6 +179,11 @@ async function renderCanvas(req, res) {
         ? getInProgressPosts({ limit: config.comingNextCount })
         : Promise.resolve([]),
     ]);
+    logEvent(wsId, 'card_rendered', {
+      trigger: componentId || 'cold_open',
+      expanded,
+      entry_count: entries.length,
+    }).catch(() => {});
     res.send(
       homeCanvas(entries, {
         expanded,
@@ -342,11 +367,13 @@ app.post('/configure', (req, res) => {
       footer_label: (v.footer_label || '').trim(),
       footer_url: (v.footer_url || '').trim(),
     };
+    logEvent(defaultWorkspaceId(), 'configure_saved', { saved }).catch(() => {});
     return res.send(configSavedResponse(saved));
   }
 
   // INITIAL LOAD: teammate opened the configure modal — return the form,
   // pre-filled with whatever's currently saved.
+  logEvent(defaultWorkspaceId(), 'configure_opened').catch(() => {});
   res.send(configureCanvas(readConfig(req)));
 });
 
