@@ -270,17 +270,37 @@ function dailyChartSvg(daily) {
     })
     .join('');
 
-  // Bars: render bar (blue, behind) + click bar (coral) per day.
+  // Bars grouped per day. Each <g> contains:
+  //   1. An invisible hit-area rect spanning the WHOLE day column (wider
+  //      than the bars themselves) so users don't have to hover precisely
+  //      on a 3-pixel bar.
+  //   2. The render + click bars themselves.
+  //   3. A <title> child — the browser's native tooltip. Shows on hover
+  //      of the group automatically. Zero JS. Accessible to screen readers.
+  // CSS .day-group:hover highlights the slot subtly for a polished feel.
   const bars = daily
     .map((d, i) => {
-      const x0 = PAD.left + i * slotW + (slotW - barW * 2 - barGap) / 2;
+      const slotX = PAD.left + i * slotW;
+      const x0 = slotX + (slotW - barW * 2 - barGap) / 2;
       const renderH = (d.renders / yMax) * innerH;
       const clickH = (d.clicks / yMax) * innerH;
       const yR = PAD.top + innerH - renderH;
       const yC = PAD.top + innerH - clickH;
+      const dateLabel = new Date(d.day).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+      // Friendly tooltip text. SVG <title> uses \n for line breaks, which
+      // most browsers render as separate lines in the native tooltip.
+      const tooltip = `${dateLabel}\n${d.clicks} click${d.clicks === 1 ? '' : 's'} · ${d.renders} render${d.renders === 1 ? '' : 's'}`;
       return `
-        <rect x="${x0}" y="${yR}" width="${barW}" height="${renderH}" class="bar-renders" rx="1.5" />
-        <rect x="${x0 + barW + barGap}" y="${yC}" width="${barW}" height="${clickH}" class="bar-clicks" rx="1.5" />
+        <g class="day-group">
+          <title>${tooltip}</title>
+          <rect x="${slotX}" y="${PAD.top}" width="${slotW}" height="${innerH}" class="hit-area" />
+          <rect x="${x0}" y="${yR}" width="${barW}" height="${renderH}" class="bar-renders" rx="1.5" />
+          <rect x="${x0 + barW + barGap}" y="${yC}" width="${barW}" height="${clickH}" class="bar-clicks" rx="1.5" />
+        </g>
       `;
     })
     .join('');
@@ -316,6 +336,7 @@ function sparklineSvg(points, { width = 80, height = 24 } = {}) {
     return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" class="spark"></svg>`;
   }
   const max = Math.max(1, ...points.map((p) => p.clicks));
+  const total = points.reduce((sum, p) => sum + p.clicks, 0);
   const slotW = width / Math.max(1, points.length - 1);
   const coords = points
     .map((p, i) => {
@@ -326,7 +347,16 @@ function sparklineSvg(points, { width = 80, height = 24 } = {}) {
     .join(' ');
   // Area under the line, semi-transparent. Plus the line itself on top.
   const area = `${0},${height} ${coords} ${width},${height}`;
+  // Native browser tooltip: per-day breakdown so you can see which day
+  // each tick on the sparkline represents without leaving the page.
+  const tooltip = points
+    .map((p) => {
+      const label = new Date(p.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      return `${label}: ${p.clicks} click${p.clicks === 1 ? '' : 's'}`;
+    })
+    .join('\n');
   return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" class="spark">
+    <title>Last 7 days: ${total} click${total === 1 ? '' : 's'}\n\n${tooltip}</title>
     <polygon points="${area}" class="spark-area" />
     <polyline points="${coords}" fill="none" class="spark-line" stroke-width="1.5" stroke-linejoin="round" />
   </svg>`;
@@ -598,11 +628,21 @@ const sharedStyle = `
   .chart-card__legend .sw--renders { background: var(--blue); }
   .chart-card__legend span + span { margin-left: 12px; }
   .chart { width: 100%; height: auto; display: block; }
-  .chart .bar-clicks  { fill: var(--coral); }
-  .chart .bar-renders { fill: var(--blue); }
+  .chart .bar-clicks  { fill: var(--coral); transition: opacity 0.12s ease; }
+  .chart .bar-renders { fill: var(--blue);  transition: opacity 0.12s ease; }
   .chart .axis-line   { stroke: var(--chart-axis); }
-  .chart .axis-label  { fill: var(--chart-label); }
-  .spark { vertical-align: middle; }
+  .chart .axis-label  { fill: var(--chart-label); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; }
+  /* Day-group hover behavior: the hit-area is a transparent rect that
+     spans the full column width so users don't have to hover precisely
+     on a 3-pixel bar. On hover it fills faintly to highlight the slot,
+     and the bars themselves brighten slightly. cursor: help is the
+     standard hint that a tooltip is available. */
+  .chart .day-group { cursor: help; }
+  .chart .hit-area  { fill: transparent; }
+  .chart .day-group:hover .hit-area  { fill: var(--chart-axis); opacity: 0.12; }
+  .chart .day-group:hover .bar-clicks,
+  .chart .day-group:hover .bar-renders { opacity: 0.85; }
+  .spark { vertical-align: middle; cursor: help; }
   .spark .spark-line { stroke: var(--coral); }
   .spark .spark-area { fill: var(--coral); opacity: 0.15; }
   .delta {
