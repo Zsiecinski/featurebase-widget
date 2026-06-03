@@ -124,3 +124,23 @@ test('admin/analytics/:ws/user/:contactId returns 503 when DB unconfigured', asy
   });
   delete process.env.ADMIN_TOKEN;
 });
+
+test('admin/analytics: accepts theme=dark and theme=light without error', async () => {
+  // Even without DB this is enough to prove the query string isn't broken
+  // by the new theme param. With DB, the route would render the dashboard
+  // with the chosen theme; here we just expect the 503 (no DB) without
+  // any parser/validation regressions from the theme handling.
+  process.env.ADMIN_TOKEN = 'secret-token-123';
+  delete process.env.DATABASE_URL;
+  await withServer(async (port) => {
+    const dark = await get(port, '/admin/analytics/staytuned?theme=dark&token=secret-token-123');
+    const light = await get(port, '/admin/analytics/staytuned?theme=light&token=secret-token-123');
+    const garbage = await get(port, '/admin/analytics/staytuned?theme=hotpink&token=secret-token-123');
+    // All three should hit the same code path and return the same status —
+    // garbage theme values should silently fall back to auto (no error).
+    assert.equal(dark.status, 503);
+    assert.equal(light.status, 503);
+    assert.equal(garbage.status, 503);
+  });
+  delete process.env.ADMIN_TOKEN;
+});
