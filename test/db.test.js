@@ -16,6 +16,7 @@ const {
   getUniqueVisitors,
   getTopItemsWithClickers,
   getUserTimeline,
+  getItemDetail,
   getDailyActivity,
   getUserSparklines,
   getPriorPeriodCounts,
@@ -81,6 +82,11 @@ test('getTopItemsWithClickers: returns [] when DATABASE_URL is unset', async () 
 test('getUserTimeline: returns null when DATABASE_URL is unset', async () => {
   delete process.env.DATABASE_URL;
   assert.equal(await getUserTimeline('staytuned', 'abc123', { days: 90 }), null);
+});
+
+test('getItemDetail: returns null when DATABASE_URL is unset', async () => {
+  delete process.env.DATABASE_URL;
+  assert.equal(await getItemDetail('staytuned', 'item-xyz', { days: 30 }), null);
 });
 
 test('getEngagementByShop: returns [] when DATABASE_URL is unset', async () => {

@@ -635,6 +635,143 @@ export async function getTopItemsWithClickers(workspaceId, { days = 30, limit = 
 }
 
 /**
+ * Full breakdown for one item — every clicker, their identity + shop +
+ * click count + last-clicked timestamp. Used by the per-item drilldown
+ * page reached by clicking an item title in the dashboard.
+ *
+ * Anonymous leads are collapsed into a single "(anonymous)" bucket and
+ * their combined click count surfaces at the bottom of the list.
+ *
+ * Returns null when the item has no events in the window — caller 404s.
+ */
+export async function getItemDetail(workspaceId, itemId, { days = 30 } = {}) {
+  const s = init();
+  if (!s) return null;
+  const n = Math.min(Math.max(Number(days) || 30, 1), 365);
+  const since = await s`SELECT NOW() - ${n}::int * INTERVAL '1 day' AS d`;
+
+  // Most-recent identity snapshot per contact_id (or '(anonymous)' bucket).
+  // Same DISTINCT-ON pattern as getEngagedUsers so updated names propagate.
+  const clickers = await s`
+    WITH latest AS (
+      SELECT DISTINCT ON (COALESCE(metadata->>'contact_id', '(anonymous)'))
+             COALESCE(metadata->>'contact_id', '(anonymous)') AS contact_id,
+             metadata->>'contact_name'    AS name,
+             metadata->>'contact_email'   AS email,
+             metadata->>'contact_type'    AS type,
+             metadata->>'contact_user_id' AS contact_user_id,
+             metadata->'contact_custom_attributes' AS contact_attrs,
+             metadata->'company_custom_attributes' AS company_attrs,
+             metadata->>'company_name'    AS company_name
+      FROM events
+      WHERE workspace_id = ${workspaceId}
+        AND event = 'item_clicked'
+        AND metadata->>'item_id' = ${itemId}
+      ORDER BY COALESCE(metadata->>'contact_id', '(anonymous)'), created_at DESC
+    ),
+    counts AS (
+      SELECT COALESCE(metadata->>'contact_id', '(anonymous)') AS contact_id,
+             COUNT(*)::int AS clicks,
+             MAX(created_at) AS last_clicked
+      FROM events
+      WHERE workspace_id = ${workspaceId}
+        AND event = 'item_clicked'
+        AND metadata->>'item_id' = ${itemId}
+        AND created_at >= ${since[0].d}
+      GROUP BY COALESCE(metadata->>'contact_id', '(anonymous)')
+    )
+    SELECT c.contact_id, l.name, l.email, l.type,
+           l.contact_user_id, l.contact_attrs, l.company_attrs, l.company_name,
+           c.clicks, c.last_clicked
+    FROM counts c
+    JOIN latest l ON l.contact_id = c.contact_id
+    ORDER BY (c.contact_id = '(anonymous)') ASC, c.clicks DESC, c.last_clicked DESC
+  `;
+
+  // Headline counts + title.
+  const [head] = await s`
+    SELECT MAX(metadata->>'item_title') AS title,
+           COUNT(*)::int AS total_clicks_period,
+           MIN(created_at) AS first_clicked,
+           MAX(created_at) AS last_clicked
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND event = 'item_clicked'
+      AND metadata->>'item_id' = ${itemId}
+      AND created_at >= ${since[0].d}
+  `;
+  if (!head || head.total_clicks_period === 0) return null;
+
+  const [allTime] = await s`
+    SELECT COUNT(*)::int AS total
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND event = 'item_clicked'
+      AND metadata->>'item_id' = ${itemId}
+  `;
+
+  // Daily activity (clicks only) for this item, zero-filled.
+  const daily = await s`
+    WITH days AS (
+      SELECT generate_series(
+        date_trunc('day', NOW() - ${n}::int * INTERVAL '1 day'),
+        date_trunc('day', NOW()),
+        INTERVAL '1 day'
+      )::date AS day
+    ),
+    counts AS (
+      SELECT date_trunc('day', created_at)::date AS day,
+             COUNT(*)::int AS clicks
+      FROM events
+      WHERE workspace_id = ${workspaceId}
+        AND event = 'item_clicked'
+        AND metadata->>'item_id' = ${itemId}
+        AND created_at >= NOW() - ${n}::int * INTERVAL '1 day'
+      GROUP BY day
+    )
+    SELECT d.day, COALESCE(c.clicks, 0) AS clicks
+    FROM days d
+    LEFT JOIN counts c ON c.day = d.day
+    ORDER BY d.day
+  `;
+
+  return {
+    item: {
+      id: itemId,
+      title: head.title || itemId,
+      firstClicked: head.first_clicked,
+      lastClicked: head.last_clicked,
+    },
+    periodDays: n,
+    totals: {
+      clicksPeriod: head.total_clicks_period,
+      clicksAllTime: allTime?.total || 0,
+      uniqueClickers: clickers.filter((c) => c.contact_id !== '(anonymous)').length,
+      anonymousClicks: clickers.find((c) => c.contact_id === '(anonymous)')?.clicks || 0,
+    },
+    clickers: clickers.map((r) => ({
+      contactId: r.contact_id === '(anonymous)' ? null : r.contact_id,
+      name: r.name,
+      email: r.email,
+      type: r.type,
+      shop: resolveShop({
+        contact_custom_attributes: r.contact_attrs,
+        contact_user_id: r.contact_user_id,
+        company_custom_attributes: r.company_attrs,
+        company_name: r.company_name,
+      }),
+      clicks: r.clicks,
+      lastClicked: r.last_clicked,
+    })),
+    dailyActivity: daily.map((r) => ({
+      day: r.day,
+      clicks: r.clicks,
+      renders: 0,  // shape-compatible with dailyChartSvg
+    })),
+  };
+}
+
+/**
  * One user's full event timeline — every render and click in chronological
  * order. Used by the per-user drilldown page at /admin/analytics/:ws/user/:id.
  */
