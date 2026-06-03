@@ -189,11 +189,32 @@ const SHOP_KEY_CANDIDATES = [
 ];
 
 /**
+ * Heuristic: does this string look like a shop identifier (domain/URL)?
+ * Used as a guard before treating Intercom's `user_id` field as a shop —
+ * many setups put the myshopify domain there, but others put internal IDs
+ * like "cust_12345" that we don't want to surface in the Shop column.
+ */
+function looksLikeShopId(s) {
+  if (!s) return false;
+  const str = String(s).trim();
+  if (!str || /\s/.test(str)) return false;
+  // Has at least one `.something`. Catches:
+  //   acme-store.myshopify.com  ✓
+  //   acme.shop                 ✓
+  //   plain-text-id             ✗
+  //   cust_12345                ✗
+  return /\.[a-z]{2,}/i.test(str);
+}
+
+/**
  * Given an event metadata blob, returns the best guess at the user's shop
- * identifier — usually a `*.myshopify.com` domain. Tries:
+ * identifier — usually a `*.myshopify.com` domain. Tries, in order:
  *   1. Common keys on contact.custom_attributes
- *   2. Common keys on company.custom_attributes
- *   3. company_name (fallback — sometimes the company itself IS the shop)
+ *   2. contact.user_id — IF it looks domain-shaped. Many Intercom setups
+ *      (including Staytuned's) use Intercom's "external user ID" field
+ *      to hold the myshopify domain directly.
+ *   3. Common keys on company.custom_attributes
+ *   4. company_name (fallback — sometimes the company itself IS the shop)
  *
  * Returns null if nothing matches. Used by getEngagedUsers, the per-shop
  * aggregator, and the user timeline page.
@@ -203,6 +224,12 @@ export function resolveShop(metadata) {
   const contactAttrs = metadata.contact_custom_attributes || {};
   for (const key of SHOP_KEY_CANDIDATES) {
     if (contactAttrs[key]) return String(contactAttrs[key]);
+  }
+  // user_id is a popular place for the myshopify domain. Gate behind a
+  // domain-shape check so non-Shopify Intercom setups don't show internal
+  // IDs as fake "shops".
+  if (looksLikeShopId(metadata.contact_user_id)) {
+    return String(metadata.contact_user_id);
   }
   const companyAttrs = metadata.company_custom_attributes || {};
   for (const key of SHOP_KEY_CANDIDATES) {
@@ -236,10 +263,11 @@ export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } 
   const rows = await s`
     SELECT
       event,
-      metadata->>'contact_id' AS contact_id,
-      metadata->'contact_custom_attributes'  AS contact_attrs,
-      metadata->'company_custom_attributes'  AS company_attrs,
-      metadata->>'company_name' AS company_name
+      metadata->>'contact_id'      AS contact_id,
+      metadata->>'contact_user_id' AS contact_user_id,
+      metadata->'contact_custom_attributes' AS contact_attrs,
+      metadata->'company_custom_attributes' AS company_attrs,
+      metadata->>'company_name'    AS company_name
     FROM events
     WHERE workspace_id = ${workspaceId}
       AND created_at >= ${since[0].d}
@@ -247,6 +275,7 @@ export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } 
         metadata->'contact_custom_attributes' IS NOT NULL
         OR metadata->'company_custom_attributes' IS NOT NULL
         OR metadata->>'company_name' IS NOT NULL
+        OR metadata->>'contact_user_id' IS NOT NULL
       )
   `;
 
@@ -254,6 +283,7 @@ export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } 
   for (const r of rows) {
     const shop = resolveShop({
       contact_custom_attributes: r.contact_attrs,
+      contact_user_id: r.contact_user_id,
       company_custom_attributes: r.company_attrs,
       company_name: r.company_name,
     });
@@ -299,13 +329,14 @@ export async function getEngagedUsers(workspaceId, { days = 30, limit = 5 } = {}
   const rows = await s`
     WITH latest AS (
       SELECT DISTINCT ON (metadata->>'contact_id')
-             metadata->>'contact_id'    AS contact_id,
-             metadata->>'contact_name'  AS name,
-             metadata->>'contact_email' AS email,
-             metadata->>'contact_type'  AS type,
+             metadata->>'contact_id'      AS contact_id,
+             metadata->>'contact_name'    AS name,
+             metadata->>'contact_email'   AS email,
+             metadata->>'contact_type'    AS type,
+             metadata->>'contact_user_id' AS contact_user_id,
              metadata->'contact_custom_attributes' AS contact_attrs,
              metadata->'company_custom_attributes' AS company_attrs,
-             metadata->>'company_name'  AS company_name
+             metadata->>'company_name'    AS company_name
       FROM events
       WHERE workspace_id = ${workspaceId}
         AND metadata->>'contact_id' IS NOT NULL
@@ -326,6 +357,7 @@ export async function getEngagedUsers(workspaceId, { days = 30, limit = 5 } = {}
            l.name,
            l.email,
            l.type,
+           l.contact_user_id,
            l.contact_attrs,
            l.company_attrs,
            l.company_name,
@@ -348,6 +380,7 @@ export async function getEngagedUsers(workspaceId, { days = 30, limit = 5 } = {}
     lastSeen: r.last_seen,
     shop: resolveShop({
       contact_custom_attributes: r.contact_attrs,
+      contact_user_id: r.contact_user_id,
       company_custom_attributes: r.company_attrs,
       company_name: r.company_name,
     }),
@@ -452,13 +485,14 @@ export async function getUserTimeline(workspaceId, contactId, { days = 90, limit
   // We grab the latest row (any event) and let resolveShop() decide
   // which custom attribute holds the shop. Avoids hardcoding key names.
   const [latest] = await s`
-    SELECT metadata->>'contact_id'    AS contact_id,
-           metadata->>'contact_name'  AS name,
-           metadata->>'contact_email' AS email,
-           metadata->>'contact_type'  AS type,
+    SELECT metadata->>'contact_id'      AS contact_id,
+           metadata->>'contact_name'    AS name,
+           metadata->>'contact_email'   AS email,
+           metadata->>'contact_type'    AS type,
+           metadata->>'contact_user_id' AS contact_user_id,
            metadata->'contact_custom_attributes' AS contact_attrs,
            metadata->'company_custom_attributes' AS company_attrs,
-           metadata->>'company_name'  AS company_name
+           metadata->>'company_name'    AS company_name
     FROM events
     WHERE workspace_id = ${workspaceId}
       AND metadata->>'contact_id' = ${contactId}
@@ -505,6 +539,7 @@ export async function getUserTimeline(workspaceId, contactId, { days = 90, limit
       type: latest.type,
       shop: resolveShop({
         contact_custom_attributes: latest.contact_attrs,
+        contact_user_id: latest.contact_user_id,
         company_custom_attributes: latest.company_attrs,
         company_name: latest.company_name,
       }),
