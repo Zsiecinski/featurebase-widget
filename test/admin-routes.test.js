@@ -145,6 +145,18 @@ test('admin/analytics/:ws/item/:itemId returns 503 when DB unconfigured', async 
   delete process.env.ADMIN_TOKEN;
 });
 
+test('admin/analytics: CSV format hits route handler (503 without DB, not 415)', async () => {
+  // With ADMIN_TOKEN but no DATABASE_URL, format=csv should reach the
+  // same code path as html/json and return 503 — not a parser error.
+  process.env.ADMIN_TOKEN = 'secret-token-123';
+  delete process.env.DATABASE_URL;
+  await withServer(async (port) => {
+    const r = await get(port, '/admin/analytics/staytuned?format=csv&token=secret-token-123');
+    assert.equal(r.status, 503);
+  });
+  delete process.env.ADMIN_TOKEN;
+});
+
 test('admin/analytics: accepts theme=dark and theme=light without error', async () => {
   // Even without DB this is enough to prove the query string isn't broken
   // by the new theme param. With DB, the route would render the dashboard

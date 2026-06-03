@@ -119,6 +119,7 @@ test('getPriorPeriodCounts: returns all-zeros when DATABASE_URL is unset', async
     itemClicks: 0,
     configureSaved: 0,
     uniqueVisitors: 0,
+    itemsClicked: 0,
   });
 });
 
