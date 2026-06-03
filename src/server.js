@@ -73,6 +73,28 @@ app.get('/', (_req, res) => {
 // State (currently just `expanded`) rides through Canvas Kit's stored_data
 // blob, which Intercom echoes back to us on every submit.
 
+// Pull the identifying fields off Intercom's `contact` payload. Stored on
+// every event so the analytics dashboard can attribute renders/clicks to
+// specific people — not just count anonymous totals.
+//
+// Returns flat key/value pairs that get spread into event metadata. Keys
+// are prefixed `contact_` so they don't collide with our own event-specific
+// fields (item_id, trigger, etc.).
+//
+// For anonymous leads (no email/name), only contact_id + contact_type are
+// populated — the dashboard renders those as "(anonymous lead)".
+function extractContact(req) {
+  const c = req.body?.contact || {};
+  if (!c.id) return {};
+  return {
+    contact_id: c.id,
+    contact_type: c.type || c.role || null,    // 'user' | 'lead' | 'contact'
+    contact_email: c.email || null,
+    contact_name: c.name || null,
+    contact_user_id: c.user_id || null,         // installer's own user ID
+  };
+}
+
 function readState(req) {
   const stored = req.body?.current_canvas?.stored_data || {};
   const componentId = req.body?.component_id || '';
@@ -156,6 +178,11 @@ async function renderCanvas(req, res) {
   // workspaceId for analytics attribution. For the private single-tenant
   // build there's only one — defaultWorkspaceId() (env-overridable).
   const wsId = defaultWorkspaceId();
+  // Extract contact attribution. Intercom sends `contact` on every Canvas
+  // Kit request. For logged-in users we get id+email+name; for anonymous
+  // leads we still get id+type but email/name are null. Storing it in
+  // metadata lets the dashboard answer "who's engaged?" not just "how many."
+  const contactMeta = extractContact(req);
 
   try {
     // Item tapped — render the detail view of that entry.
@@ -166,6 +193,7 @@ async function renderCanvas(req, res) {
       logEvent(wsId, 'item_clicked', {
         item_id: entryId,
         item_title: entry?.title || null,
+        ...contactMeta,
       }).catch(() => {});
       return res.send(detailCanvas(entry, { expanded, baseUrl }));
     }
@@ -183,6 +211,7 @@ async function renderCanvas(req, res) {
       trigger: componentId || 'cold_open',
       expanded,
       entry_count: entries.length,
+      ...contactMeta,
     }).catch(() => {});
     res.send(
       homeCanvas(entries, {

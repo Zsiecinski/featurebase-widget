@@ -130,6 +130,16 @@ export async function getAnalytics(workspaceId, { days = 30 } = {}) {
   const totalAllTime = Object.values(allTime).reduce((a, b) => a + b, 0);
   if (totalAllTime === 0) return null;
 
+  // Unique visitor count for the KPI card. Inline so the analytics
+  // endpoint stays one round-trip from the route handler.
+  const [uniques] = await s`
+    SELECT COUNT(DISTINCT metadata->>'contact_id')::int AS n
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND metadata->>'contact_id' IS NOT NULL
+      AND created_at >= ${sinceDate}
+  `;
+
   return {
     tenant: {
       workspaceId,
@@ -141,6 +151,7 @@ export async function getAnalytics(workspaceId, { days = 30 } = {}) {
       cardsRendered: renders,
       itemClicks: clicks,
       clickThroughRate: renders > 0 ? Number((clicks / renders).toFixed(3)) : 0,
+      uniqueVisitors: uniques?.n || 0,
       configureOpened: period.configure_opened || 0,
       configureSaved: period.configure_saved || 0,
       installs: period.install || 0,
@@ -157,6 +168,224 @@ export async function getAnalytics(workspaceId, { days = 30 } = {}) {
       itemId: r.item_id,
       title: r.item_title,
       clicks: r.clicks,
+    })),
+  };
+}
+
+/**
+ * Top N most engaged users (by item-click count, with renders as tiebreaker).
+ * Used by the "Most engaged users" leaderboard on the analytics dashboard.
+ *
+ * Resolves identity by taking the *most recent* contact_name/email for each
+ * contact_id — so if someone updates their name in Intercom, our leaderboard
+ * reflects that without us needing to backfill old rows.
+ *
+ * Anonymous leads (contact_id present but name/email null) still get a row
+ * so they're countable, just labeled "(anonymous lead)" in the renderer.
+ */
+export async function getEngagedUsers(workspaceId, { days = 30, limit = 5 } = {}) {
+  const s = init();
+  if (!s) return [];
+  const lim = Math.min(Math.max(Number(limit) || 5, 1), 50);
+  const since = await s`SELECT NOW() - ${Number(days)}::int * INTERVAL '1 day' AS d`;
+  const rows = await s`
+    WITH latest AS (
+      SELECT DISTINCT ON (metadata->>'contact_id')
+             metadata->>'contact_id'    AS contact_id,
+             metadata->>'contact_name'  AS name,
+             metadata->>'contact_email' AS email,
+             metadata->>'contact_type'  AS type
+      FROM events
+      WHERE workspace_id = ${workspaceId}
+        AND metadata->>'contact_id' IS NOT NULL
+      ORDER BY metadata->>'contact_id', created_at DESC
+    ),
+    counts AS (
+      SELECT metadata->>'contact_id' AS contact_id,
+             COUNT(*) FILTER (WHERE event = 'item_clicked')  AS clicks,
+             COUNT(*) FILTER (WHERE event = 'card_rendered') AS renders,
+             MAX(created_at) AS last_seen
+      FROM events
+      WHERE workspace_id = ${workspaceId}
+        AND metadata->>'contact_id' IS NOT NULL
+        AND created_at >= ${since[0].d}
+      GROUP BY metadata->>'contact_id'
+    )
+    SELECT c.contact_id,
+           l.name,
+           l.email,
+           l.type,
+           c.clicks::int  AS clicks,
+           c.renders::int AS renders,
+           c.last_seen
+    FROM counts c
+    JOIN latest l ON l.contact_id = c.contact_id
+    WHERE c.clicks > 0 OR c.renders > 0
+    ORDER BY c.clicks DESC, c.renders DESC, c.last_seen DESC
+    LIMIT ${lim}
+  `;
+  return rows.map((r) => ({
+    contactId: r.contact_id,
+    name: r.name,
+    email: r.email,
+    type: r.type,
+    clicks: r.clicks,
+    renders: r.renders,
+    lastSeen: r.last_seen,
+  }));
+}
+
+/**
+ * Distinct contact_ids that triggered any event in the window. Used by
+ * the "Unique visitors" KPI card. Returns 0 cleanly when DB unavailable.
+ */
+export async function getUniqueVisitors(workspaceId, { days = 30 } = {}) {
+  const s = init();
+  if (!s) return 0;
+  const since = await s`SELECT NOW() - ${Number(days)}::int * INTERVAL '1 day' AS d`;
+  const [row] = await s`
+    SELECT COUNT(DISTINCT metadata->>'contact_id')::int AS uniques
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND metadata->>'contact_id' IS NOT NULL
+      AND created_at >= ${since[0].d}
+  `;
+  return row?.uniques || 0;
+}
+
+/**
+ * Per-item click breakdown — who clicked which item, with their click count.
+ * Used by the expandable "Top items" table on the analytics dashboard so
+ * you can drill from "Inventory sync got 8 clicks" into "and Bob clicked
+ * it 3 times, Jane twice, anonymous lead twice…"
+ *
+ * Returns an array of { itemId, title, clicks, clickers: [{ contactId,
+ * name, email, type, clicks }] } objects, sorted by total clicks desc.
+ */
+export async function getTopItemsWithClickers(workspaceId, { days = 30, limit = 5 } = {}) {
+  const s = init();
+  if (!s) return [];
+  const lim = Math.min(Math.max(Number(limit) || 5, 1), 20);
+  const since = await s`SELECT NOW() - ${Number(days)}::int * INTERVAL '1 day' AS d`;
+
+  // Step 1: top N items by click count.
+  const items = await s`
+    SELECT metadata->>'item_id'    AS item_id,
+           MAX(metadata->>'item_title') AS title,
+           COUNT(*)::int           AS clicks
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND event = 'item_clicked'
+      AND metadata->>'item_id' IS NOT NULL
+      AND created_at >= ${since[0].d}
+    GROUP BY metadata->>'item_id'
+    ORDER BY clicks DESC
+    LIMIT ${lim}
+  `;
+  if (items.length === 0) return [];
+
+  // Step 2: for each item, top clickers. One round-trip via UNNEST.
+  const itemIds = items.map((i) => i.item_id);
+  const clickers = await s`
+    SELECT metadata->>'item_id' AS item_id,
+           COALESCE(metadata->>'contact_id', '(anonymous)') AS contact_id,
+           MAX(metadata->>'contact_name')  AS name,
+           MAX(metadata->>'contact_email') AS email,
+           MAX(metadata->>'contact_type')  AS type,
+           COUNT(*)::int AS clicks
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND event = 'item_clicked'
+      AND created_at >= ${since[0].d}
+      AND metadata->>'item_id' = ANY(${itemIds})
+    GROUP BY metadata->>'item_id', COALESCE(metadata->>'contact_id', '(anonymous)')
+    ORDER BY clicks DESC
+  `;
+  const byItem = new Map();
+  for (const c of clickers) {
+    if (!byItem.has(c.item_id)) byItem.set(c.item_id, []);
+    byItem.get(c.item_id).push({
+      contactId: c.contact_id === '(anonymous)' ? null : c.contact_id,
+      name: c.name,
+      email: c.email,
+      type: c.type,
+      clicks: c.clicks,
+    });
+  }
+  return items.map((i) => ({
+    itemId: i.item_id,
+    title: i.title,
+    clicks: i.clicks,
+    clickers: byItem.get(i.item_id) || [],
+  }));
+}
+
+/**
+ * One user's full event timeline — every render and click in chronological
+ * order. Used by the per-user drilldown page at /admin/analytics/:ws/user/:id.
+ */
+export async function getUserTimeline(workspaceId, contactId, { days = 90, limit = 200 } = {}) {
+  const s = init();
+  if (!s) return null;
+  const since = await s`SELECT NOW() - ${Number(days)}::int * INTERVAL '1 day' AS d`;
+
+  // Identity snapshot (most recent name/email we've seen for this user).
+  const [latest] = await s`
+    SELECT metadata->>'contact_id'    AS contact_id,
+           metadata->>'contact_name'  AS name,
+           metadata->>'contact_email' AS email,
+           metadata->>'contact_type'  AS type,
+           MIN(created_at) AS first_seen,
+           MAX(created_at) AS last_seen
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND metadata->>'contact_id' = ${contactId}
+    GROUP BY metadata->>'contact_id', metadata->>'contact_name', metadata->>'contact_email', metadata->>'contact_type'
+    ORDER BY MAX(created_at) DESC
+    LIMIT 1
+  `;
+  if (!latest) return null;
+
+  const lim = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+  const events = await s`
+    SELECT id, event, metadata, created_at
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND metadata->>'contact_id' = ${contactId}
+      AND created_at >= ${since[0].d}
+    ORDER BY created_at DESC
+    LIMIT ${lim}
+  `;
+
+  // Aggregate counts for the user header KPIs.
+  const [counts] = await s`
+    SELECT COUNT(*) FILTER (WHERE event = 'item_clicked')::int  AS clicks,
+           COUNT(*) FILTER (WHERE event = 'card_rendered')::int AS renders
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND metadata->>'contact_id' = ${contactId}
+      AND created_at >= ${since[0].d}
+  `;
+
+  return {
+    user: {
+      contactId: latest.contact_id,
+      name: latest.name,
+      email: latest.email,
+      type: latest.type,
+      firstSeen: latest.first_seen,
+      lastSeen: latest.last_seen,
+    },
+    periodDays: Number(days),
+    totals: {
+      clicks: counts?.clicks || 0,
+      renders: counts?.renders || 0,
+    },
+    events: events.map((e) => ({
+      id: e.id,
+      event: e.event,
+      at: e.created_at,
+      metadata: e.metadata,
     })),
   };
 }
