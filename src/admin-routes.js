@@ -22,6 +22,7 @@ import {
   dbAvailable,
   getAnalytics,
   getEngagedUsers,
+  getEngagementByShop,
   getTopItemsWithClickers,
   getUserTimeline,
   recentEvents,
@@ -68,11 +69,12 @@ export function registerAdminRoutes(app) {
     const days = Math.min(Math.max(requested, 1), 365);
     const showPii = truthyParam(req.query.show_pii);
 
-    // Three queries in parallel — none depend on each other.
-    const [data, engaged, itemsWithClickers] = await Promise.all([
+    // Four queries in parallel — none depend on each other.
+    const [data, engaged, itemsWithClickers, byShop] = await Promise.all([
       getAnalytics(req.params.workspaceId, { days }),
       getEngagedUsers(req.params.workspaceId, { days, limit: 5 }),
       getTopItemsWithClickers(req.params.workspaceId, { days, limit: 5 }),
+      getEngagementByShop(req.params.workspaceId, { days, limit: 5 }),
     ]);
     if (!data) return res.status(404).json({ error: 'no events for this workspace yet' });
 
@@ -82,7 +84,7 @@ export function registerAdminRoutes(app) {
     if (wantsHtml) {
       res.type('html').send(
         analyticsHtml(
-          { ...data, engagedUsers: engaged, itemsWithClickers },
+          { ...data, engagedUsers: engaged, itemsWithClickers, engagementByShop: byShop },
           { token: tokenFrom(req), showPii },
         ),
       );
@@ -91,6 +93,9 @@ export function registerAdminRoutes(app) {
     // JSON view applies masking too — so the same toggle behavior is
     // consistent whether you're hitting the dashboard in a browser or
     // pulling data with curl. Pass &show_pii=1 to get raw identities.
+    // Note: shop is NOT masked — myshopify domains are business
+    // identifiers, not PII, and the whole point of capturing them
+    // is to be able to see them in a list.
     res.json({
       ...data,
       engagedUsers: engaged.map((u) => maskUser(u, showPii)),
@@ -98,6 +103,7 @@ export function registerAdminRoutes(app) {
         ...it,
         clickers: it.clickers.map((c) => maskUser(c, showPii)),
       })),
+      engagementByShop: byShop,
     });
   });
 
@@ -177,6 +183,16 @@ const escape = (s) =>
 const fmt = (n) => Number(n || 0).toLocaleString('en-US');
 const pct = (n) => `${(Number(n || 0) * 100).toFixed(1)}%`;
 const dt = (s) => (s ? new Date(s).toISOString().slice(0, 19).replace('T', ' ') + ' UTC' : '—');
+
+// Render a shop value. Auto-detects whether it looks like a myshopify
+// domain and styles it as code; otherwise shows it plain. Null/empty
+// renders as a muted dash so columns line up cleanly.
+function shopCell(shop, { strong = false } = {}) {
+  if (!shop) return '<span class="muted">—</span>';
+  const looksLikeDomain = /\.[a-z]{2,}(?:\/|$)/i.test(String(shop));
+  const inner = looksLikeDomain ? `<code>${escape(shop)}</code>` : escape(shop);
+  return strong ? `<strong>${inner}</strong>` : inner;
+}
 
 // Format a user row as a single-line label. Anonymous leads (no
 // contact_id) get a styled muted label; identified users show their
@@ -318,12 +334,33 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
         <tr>
           <td class="rank">${i + 1}</td>
           <td>${userLabel(u, { workspaceId: d.tenant.workspaceId, token })}</td>
+          <td>${shopCell(u.shop)}</td>
           <td class="num">${fmt(u.clicks)}</td>
           <td class="num">${fmt(u.renders)}</td>
           <td class="num"><span class="muted">${dt(u.lastSeen).slice(0, 16)}</span></td>
         </tr>`)
         .join('')
-    : `<tr><td colspan="5" class="muted-cell">No identified visitors yet in this window.</td></tr>`;
+    : `<tr><td colspan="6" class="muted-cell">No identified visitors yet in this window.</td></tr>`;
+
+  // Top-shops section. Only render if Intercom is actually sending shop
+  // data — otherwise show a helpful empty-state explaining how to wire it.
+  const shopRows = (d.engagementByShop || []).length
+    ? d.engagementByShop
+        .map((s, i) => `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td>${shopCell(s.shop, { strong: true })}</td>
+          <td class="num">${fmt(s.uniqueVisitors)}</td>
+          <td class="num">${fmt(s.clicks)}</td>
+          <td class="num">${fmt(s.renders)}</td>
+        </tr>`)
+        .join('')
+    : `<tr><td colspan="5" class="muted-cell">
+         No shop attribution yet. Intercom contacts (or their companies) need a
+         <code>shopify_domain</code> custom attribute set for Loop to surface this.
+         Loop also recognises <code>shop_domain</code>, <code>myshopify_domain</code>,
+         <code>store_domain</code>, and a few others.
+       </td></tr>`;
 
   const itemRows = items.length
     ? items
@@ -409,12 +446,27 @@ function analyticsHtml(d, { token = '', showPii = false } = {}) {
       <tr>
         <th>#</th>
         <th>Visitor</th>
+        <th>Shop</th>
         <th class="num">Item clicks</th>
         <th class="num">Renders</th>
         <th class="num">Last seen</th>
       </tr>
     </thead>
     <tbody>${engagedRows}</tbody>
+  </table>
+
+  <h2>Engagement by shop (last ${d.periodDays} days)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Shop</th>
+        <th class="num">Unique visitors</th>
+        <th class="num">Clicks</th>
+        <th class="num">Renders</th>
+      </tr>
+    </thead>
+    <tbody>${shopRows}</tbody>
   </table>
 
   <h2>Top items, with who clicked (last ${d.periodDays} days)</h2>
@@ -501,7 +553,7 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false } = {}) 
 <div class="container">
   <div class="sub"><a href="/admin/analytics/${encodeURIComponent(workspaceId)}?format=html&days=${d.periodDays}${tokenSuffix}${piiSuffix}">← All analytics</a></div>
   <h1>${u.name ? escape(u.name) : '<span class="muted">Unnamed visitor</span>'}</h1>
-  <div class="sub">${u.email ? `<span class="email">${escape(u.email)}</span> · ` : ''}${escape(u.type || 'visitor')} · Last ${d.periodDays} days</div>
+  <div class="sub">${u.email ? `<span class="email">${escape(u.email)}</span> · ` : ''}${escape(u.type || 'visitor')}${d.user.shop ? ` · ${shopCell(d.user.shop)}` : ''} · Last ${d.periodDays} days</div>
   <div class="ws-pill">${escape(workspaceId)}</div>
 
   <div class="toolbar">
@@ -562,6 +614,8 @@ function userTimelineHtml(d, { workspaceId, token = '', showPii = false } = {}) 
     <dt>Name</dt><dd>${u.name ? escape(u.name) : '<span class="muted">—</span>'}</dd>
     <dt>Email</dt><dd>${u.email ? escape(u.email) : '<span class="muted">—</span>'}</dd>
     <dt>Type</dt><dd>${escape(u.type || '—')}</dd>
+    <dt>Shop</dt><dd>${d.user.shop ? shopCell(d.user.shop) : '<span class="muted">—</span>'}</dd>
+    ${d.user.companyName && d.user.companyName !== d.user.shop ? `<dt>Company</dt><dd>${escape(d.user.companyName)}</dd>` : ''}
   </dl>
 
   <div class="footer">

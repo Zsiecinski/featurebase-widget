@@ -78,20 +78,39 @@ app.get('/', (_req, res) => {
 // specific people — not just count anonymous totals.
 //
 // Returns flat key/value pairs that get spread into event metadata. Keys
-// are prefixed `contact_` so they don't collide with our own event-specific
-// fields (item_id, trigger, etc.).
+// are prefixed `contact_` (or `company_`) so they don't collide with our
+// own event-specific fields (item_id, trigger, etc.).
 //
 // For anonymous leads (no email/name), only contact_id + contact_type are
 // populated — the dashboard renders those as "(anonymous lead)".
+//
+// Shop attribution: we don't know which custom-attribute key Staytuned
+// uses for the myshopify domain, so we capture the WHOLE custom_attributes
+// blob + the first attached company's name & attrs. The dashboard's
+// resolveShop() function then tries common field names in order and
+// returns whatever it finds. This means new Intercom setups using a
+// different key just need to add to that list, not change capture code.
 function extractContact(req) {
   const c = req.body?.contact || {};
   if (!c.id) return {};
+  // First attached company, if any. Staytuned-style installs often have
+  // one Company per shop, with the myshopify domain in either the
+  // company name itself or company.custom_attributes.shopify_domain.
+  const company = Array.isArray(c.companies) && c.companies[0] ? c.companies[0] : null;
   return {
     contact_id: c.id,
     contact_type: c.type || c.role || null,    // 'user' | 'lead' | 'contact'
     contact_email: c.email || null,
     contact_name: c.name || null,
     contact_user_id: c.user_id || null,         // installer's own user ID
+    // Full custom attribute blob — small, JSON, queryable via metadata->>.
+    // Lets us add new "shop key" candidates later without code changes
+    // and without re-capturing old data.
+    contact_custom_attributes: c.custom_attributes || null,
+    // First company, if any.
+    company_id: company?.company_id || company?.id || null,
+    company_name: company?.name || null,
+    company_custom_attributes: company?.custom_attributes || null,
   };
 }
 
