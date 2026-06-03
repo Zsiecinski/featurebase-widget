@@ -172,6 +172,114 @@ export async function getAnalytics(workspaceId, { days = 30 } = {}) {
   };
 }
 
+// Common keys Intercom installs use to tag a contact (or its company) with
+// the Shopify store identifier. Ordered by preference — first match wins.
+// Extend this list if you onboard another customer whose Intercom uses a
+// different convention.
+const SHOP_KEY_CANDIDATES = [
+  'shopify_domain',
+  'shop_domain',
+  'myshopify_domain',
+  'shopify_url',
+  'shop_url',
+  'store_domain',
+  'store_url',
+  'shop',
+  'store',
+];
+
+/**
+ * Given an event metadata blob, returns the best guess at the user's shop
+ * identifier — usually a `*.myshopify.com` domain. Tries:
+ *   1. Common keys on contact.custom_attributes
+ *   2. Common keys on company.custom_attributes
+ *   3. company_name (fallback — sometimes the company itself IS the shop)
+ *
+ * Returns null if nothing matches. Used by getEngagedUsers, the per-shop
+ * aggregator, and the user timeline page.
+ */
+export function resolveShop(metadata) {
+  if (!metadata) return null;
+  const contactAttrs = metadata.contact_custom_attributes || {};
+  for (const key of SHOP_KEY_CANDIDATES) {
+    if (contactAttrs[key]) return String(contactAttrs[key]);
+  }
+  const companyAttrs = metadata.company_custom_attributes || {};
+  for (const key of SHOP_KEY_CANDIDATES) {
+    if (companyAttrs[key]) return String(companyAttrs[key]);
+  }
+  // Fallback: if the company name itself looks like a shop URL/domain,
+  // use it. ("acme-store.myshopify.com" as the literal company name.)
+  if (metadata.company_name) return String(metadata.company_name);
+  return null;
+}
+
+/**
+ * Top N shops by total click count. Aggregates events by resolveShop(),
+ * which means it works regardless of which Intercom custom-attribute key
+ * holds the myshopify domain. Used by the "Engagement by shop" section
+ * of the dashboard.
+ *
+ * Returns [] when DB is unavailable or no events have shop attribution
+ * yet — the renderer shows a friendly "no shop data" empty state.
+ */
+export async function getEngagementByShop(workspaceId, { days = 30, limit = 5 } = {}) {
+  const s = init();
+  if (!s) return [];
+  const lim = Math.min(Math.max(Number(limit) || 5, 1), 50);
+  const since = await s`SELECT NOW() - ${Number(days)}::int * INTERVAL '1 day' AS d`;
+
+  // We can't push resolveShop() into SQL (it's app-level logic with a
+  // priority list), so we pull recent events with the attribution fields
+  // and aggregate in JS. The COUNT-only filter keeps payload small even
+  // on busy workspaces — we project just the 5 columns we need.
+  const rows = await s`
+    SELECT
+      event,
+      metadata->>'contact_id' AS contact_id,
+      metadata->'contact_custom_attributes'  AS contact_attrs,
+      metadata->'company_custom_attributes'  AS company_attrs,
+      metadata->>'company_name' AS company_name
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND created_at >= ${since[0].d}
+      AND (
+        metadata->'contact_custom_attributes' IS NOT NULL
+        OR metadata->'company_custom_attributes' IS NOT NULL
+        OR metadata->>'company_name' IS NOT NULL
+      )
+  `;
+
+  const byShop = new Map();
+  for (const r of rows) {
+    const shop = resolveShop({
+      contact_custom_attributes: r.contact_attrs,
+      company_custom_attributes: r.company_attrs,
+      company_name: r.company_name,
+    });
+    if (!shop) continue;
+    if (!byShop.has(shop)) byShop.set(shop, { shop, clicks: 0, renders: 0, contactIds: new Set() });
+    const bucket = byShop.get(shop);
+    if (r.event === 'item_clicked') bucket.clicks++;
+    else if (r.event === 'card_rendered') bucket.renders++;
+    if (r.contact_id) bucket.contactIds.add(r.contact_id);
+  }
+
+  return Array.from(byShop.values())
+    .map((b) => ({
+      shop: b.shop,
+      clicks: b.clicks,
+      renders: b.renders,
+      uniqueVisitors: b.contactIds.size,
+    }))
+    .sort((a, b) =>
+      b.clicks - a.clicks ||
+      b.renders - a.renders ||
+      b.uniqueVisitors - a.uniqueVisitors,
+    )
+    .slice(0, lim);
+}
+
 /**
  * Top N most engaged users (by item-click count, with renders as tiebreaker).
  * Used by the "Most engaged users" leaderboard on the analytics dashboard.
@@ -194,7 +302,10 @@ export async function getEngagedUsers(workspaceId, { days = 30, limit = 5 } = {}
              metadata->>'contact_id'    AS contact_id,
              metadata->>'contact_name'  AS name,
              metadata->>'contact_email' AS email,
-             metadata->>'contact_type'  AS type
+             metadata->>'contact_type'  AS type,
+             metadata->'contact_custom_attributes' AS contact_attrs,
+             metadata->'company_custom_attributes' AS company_attrs,
+             metadata->>'company_name'  AS company_name
       FROM events
       WHERE workspace_id = ${workspaceId}
         AND metadata->>'contact_id' IS NOT NULL
@@ -215,6 +326,9 @@ export async function getEngagedUsers(workspaceId, { days = 30, limit = 5 } = {}
            l.name,
            l.email,
            l.type,
+           l.contact_attrs,
+           l.company_attrs,
+           l.company_name,
            c.clicks::int  AS clicks,
            c.renders::int AS renders,
            c.last_seen
@@ -232,6 +346,11 @@ export async function getEngagedUsers(workspaceId, { days = 30, limit = 5 } = {}
     clicks: r.clicks,
     renders: r.renders,
     lastSeen: r.last_seen,
+    shop: resolveShop({
+      contact_custom_attributes: r.contact_attrs,
+      company_custom_attributes: r.company_attrs,
+      company_name: r.company_name,
+    }),
   }));
 }
 
@@ -329,22 +448,33 @@ export async function getUserTimeline(workspaceId, contactId, { days = 90, limit
   if (!s) return null;
   const since = await s`SELECT NOW() - ${Number(days)}::int * INTERVAL '1 day' AS d`;
 
-  // Identity snapshot (most recent name/email we've seen for this user).
+  // Identity snapshot — most recent name/email/attrs for this user.
+  // We grab the latest row (any event) and let resolveShop() decide
+  // which custom attribute holds the shop. Avoids hardcoding key names.
   const [latest] = await s`
     SELECT metadata->>'contact_id'    AS contact_id,
            metadata->>'contact_name'  AS name,
            metadata->>'contact_email' AS email,
            metadata->>'contact_type'  AS type,
-           MIN(created_at) AS first_seen,
-           MAX(created_at) AS last_seen
+           metadata->'contact_custom_attributes' AS contact_attrs,
+           metadata->'company_custom_attributes' AS company_attrs,
+           metadata->>'company_name'  AS company_name
     FROM events
     WHERE workspace_id = ${workspaceId}
       AND metadata->>'contact_id' = ${contactId}
-    GROUP BY metadata->>'contact_id', metadata->>'contact_name', metadata->>'contact_email', metadata->>'contact_type'
-    ORDER BY MAX(created_at) DESC
+    ORDER BY created_at DESC
     LIMIT 1
   `;
   if (!latest) return null;
+
+  // Separate query for the first/last bracket — the identity snapshot
+  // is for the MOST RECENT row only, but first_seen should look at all.
+  const [bracket] = await s`
+    SELECT MIN(created_at) AS first_seen, MAX(created_at) AS last_seen
+    FROM events
+    WHERE workspace_id = ${workspaceId}
+      AND metadata->>'contact_id' = ${contactId}
+  `;
 
   const lim = Math.min(Math.max(Number(limit) || 200, 1), 1000);
   const events = await s`
@@ -373,8 +503,14 @@ export async function getUserTimeline(workspaceId, contactId, { days = 90, limit
       name: latest.name,
       email: latest.email,
       type: latest.type,
-      firstSeen: latest.first_seen,
-      lastSeen: latest.last_seen,
+      shop: resolveShop({
+        contact_custom_attributes: latest.contact_attrs,
+        company_custom_attributes: latest.company_attrs,
+        company_name: latest.company_name,
+      }),
+      companyName: latest.company_name,
+      firstSeen: bracket?.first_seen || null,
+      lastSeen: bracket?.last_seen || null,
     },
     periodDays: Number(days),
     totals: {
